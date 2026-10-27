@@ -294,6 +294,12 @@ async def _save_upload_file(
     return upload_path
 
 
+def _original_upload_name(upload: Optional[UploadFile]) -> str:
+    """Return a display-only basename from the original client filename."""
+    raw_name = (upload.filename or "").replace("\\", "/") if upload else ""
+    return os.path.basename(raw_name).strip()[:255]
+
+
 @router.post("/api/tasks/simple")
 async def create_simple_task(
     prompt: str = Form(...),
@@ -374,9 +380,11 @@ async def create_simple_task(
     upload_dir = helpers.get_upload_dir()
     # 处理参考图上传（L4: 用 UUID 替代客户端文件名，避免路径穿越）
     if reference_image and reference_image.filename:
+        state.reference_image_name = _original_upload_name(reference_image)
         state.reference_image = await _save_upload_file(reference_image, upload_dir, f"{task_id}_ref")
     # 处理尾帧图上传（keyframes 模式）
     if end_frame_image and end_frame_image.filename:
+        state.end_frame_image_name = _original_upload_name(end_frame_image)
         state.end_frame_image = await _save_upload_file(end_frame_image, upload_dir, f"{task_id}_end")
 
     pipeline = deps.create_pipeline_for_type(TaskType.SIMPLE, api_key, task_id, dir_name)

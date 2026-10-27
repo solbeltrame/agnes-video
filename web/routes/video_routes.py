@@ -278,15 +278,21 @@ async def delete_task(task_id: str):
     # 1. 运行中保护（含排队中）
     if task_id in app_state.active_pipelines:
         pipeline = app_state.active_pipelines.get(task_id)
-        if pipeline is not None and not getattr(pipeline, "_stop_event", None).is_set():
+        stop_event = getattr(pipeline, "_stop_event", None) if pipeline is not None else None
+        if pipeline is not None:
+            if stop_event is None or not stop_event.is_set():
+                raise HTTPException(
+                    status_code=400,
+                    detail=translate("task.delete_running"),
+                )
             raise HTTPException(
-                status_code=400,
-                detail="Cannot delete a running task. Stop it first.",
+                status_code=409,
+                detail=translate("task.delete_stopping"),
             )
     if task_id in app_state._queued_tasks:
         raise HTTPException(
             status_code=400,
-            detail="Task is queued. Stop it before deleting.",
+            detail=translate("task.delete_queued"),
         )
 
     # 2. 定位任务工作目录
@@ -296,15 +302,28 @@ async def delete_task(task_id: str):
         # 路径穿越防护：先经 realpath 解析，确认目录位于工作目录内才允许删除
         real_root = os.path.realpath(get_working_dir())
         real_task_dir = os.path.realpath(os.path.join(get_working_dir(), dir_name))
-        if real_task_dir != real_root and real_task_dir.startswith(real_root + os.sep):
-            if os.path.exists(real_task_dir):
-                shutil.rmtree(real_task_dir, ignore_errors=True)
-                removed_dir = True
-                logger.info("[Delete] Task %s directory removed: %s",
-                            safe_log(task_id), real_task_dir)
-        else:
+        if real_task_dir == real_root or not real_task_dir.startswith(real_root + os.sep):
             logger.warning("[Delete] Unsafe task dir for %s, skipped: %s",
                            safe_log(task_id), safe_log(dir_name))
+            raise HTTPException(status_code=400, detail=translate("task.delete_unsafe_path"))
+        if os.path.exists(real_task_dir):
+            try:
+                shutil.rmtree(real_task_dir)
+            except OSError as exc:
+                logger.warning("[Delete] Failed removing task %s directory: %s",
+                               safe_log(task_id), safe_log(exc))
+                raise HTTPException(
+                    status_code=500,
+                    detail=translate("task.delete_files_failed"),
+                ) from exc
+            if os.path.exists(real_task_dir):
+                raise HTTPException(
+                    status_code=500,
+                    detail=translate("task.delete_files_remain"),
+                )
+            removed_dir = True
+            logger.info("[Delete] Task %s directory removed: %s",
+                        safe_log(task_id), real_task_dir)
 
     # 3. 从活动注册表 / 排队列表摘除
     app_state.active_pipelines.pop(task_id, None)

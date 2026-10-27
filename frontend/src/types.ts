@@ -28,7 +28,7 @@ export interface TaskState {
   creative_name?: string
   title?: string
   // v6.1：后台是否有活跃 pipeline（服务重启后遗留的 pending/queued 任务为 false）
-  active?: boolean
+  active?: boolean | null
   // GA 埋点：error_collector 内存聚合的上游接口报错（按状态码计数，轮询增量上报）
   upstream_errors?: UpstreamError[]
   [key: string]: any
@@ -51,6 +51,10 @@ export interface TaskListItem {
   title?: string
   idea?: string
   prompt?: string
+  reference_image_url?: string
+  end_frame_image_url?: string
+  reference_image_name?: string
+  end_frame_image_name?: string
   manuscript_text?: string
   script_text?: string
   scene_count?: number

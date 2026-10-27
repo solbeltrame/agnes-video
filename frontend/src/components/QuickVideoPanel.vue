@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { appState } from '@/store'
 import { useTaskSubmit } from '@/composables/useTaskSubmit'
 import { useConfig } from '@/composables/useConfig'
 import { useModalA11y } from '@/composables/useModalA11y'
+import { t } from '@/i18n'
+import RefreshIcon from '@/components/shared/RefreshIcon.vue'
 
 const props = defineProps<{ modelsReady: boolean }>()
 const submitter = useTaskSubmit()
@@ -28,10 +30,25 @@ const addImagesInput = ref<HTMLInputElement | null>(null)
 const promptError = ref('')
 const attachmentError = ref('')
 const modelSaving = ref(false)
+const resetConfirmOpen = ref(false)
 const previewImage = ref<{ src: string; name: string; frame: string } | null>(null)
 const previewOpen = computed(() => previewImage.value !== null)
+const hasFormContent = computed(() => Boolean(
+  taskTitle.value.trim()
+  || prompt.value.trim()
+  || startImage.value
+  || endImage.value
+  || duration.value !== 8
+  || aspectRatio.value !== '16:9'
+  || generationMode.value !== 'image'
+  || promptError.value
+  || attachmentError.value
+  || startError.value
+  || endError.value,
+))
 const supportedExtensions = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'])
 const { containerRef: previewModalRef } = useModalA11y(previewOpen, () => { previewImage.value = null })
+const { containerRef: resetModalRef } = useModalA11y(resetConfirmOpen, () => { resetConfirmOpen.value = false })
 
 watch(
   () => [props.modelsReady, appState.modelListCache.video, appState.models.video] as const,
@@ -65,6 +82,7 @@ const aspectDimensions: Record<string, [number, number]> = {
   '9:16': [720, 1280],
   '1:1': [720, 720],
 }
+let fileDragDepth = 0
 
 function modelLabel(model: string): string {
   const capability = appState.videoCapabilities[model] || {}
@@ -94,7 +112,49 @@ watch(endImage, (next) => {
   endPreview.value = next ? URL.createObjectURL(next) : ''
   endError.value = ''
 })
+function isImageFileDrag(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer?.types || []).includes('Files')
+}
+
+function onWindowDragEnter(event: DragEvent) {
+  if (!isImageFileDrag(event)) return
+  event.preventDefault()
+  fileDragDepth += 1
+  dragActive.value = true
+}
+
+function onWindowDragOver(event: DragEvent) {
+  if (!isImageFileDrag(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+
+function onWindowDragLeave(event: DragEvent) {
+  if (!isImageFileDrag(event)) return
+  fileDragDepth = Math.max(0, fileDragDepth - 1)
+  if (fileDragDepth === 0) dragActive.value = false
+}
+
+function onWindowDrop(event: DragEvent) {
+  if (!isImageFileDrag(event)) return
+  event.preventDefault()
+  fileDragDepth = 0
+  dragActive.value = false
+  addImages(Array.from(event.dataTransfer?.files || []))
+}
+
+onMounted(() => {
+  window.addEventListener('dragenter', onWindowDragEnter)
+  window.addEventListener('dragover', onWindowDragOver)
+  window.addEventListener('dragleave', onWindowDragLeave)
+  window.addEventListener('drop', onWindowDrop)
+})
 onBeforeUnmount(() => {
+  window.removeEventListener('dragenter', onWindowDragEnter)
+  window.removeEventListener('dragover', onWindowDragOver)
+  window.removeEventListener('dragleave', onWindowDragLeave)
+  window.removeEventListener('drop', onWindowDrop)
+  fileDragDepth = 0
   if (startPreview.value) URL.revokeObjectURL(startPreview.value)
   if (endPreview.value) URL.revokeObjectURL(endPreview.value)
 })
@@ -124,11 +184,6 @@ function onAddImagesChange(event: Event) {
   const input = event.target as HTMLInputElement
   addImages(Array.from(input.files || []))
   input.value = ''
-}
-
-function onDrop(event: DragEvent) {
-  dragActive.value = false
-  addImages(Array.from(event.dataTransfer?.files || []))
 }
 
 function addImages(files: File[]) {
@@ -170,6 +225,22 @@ function selectGenerationMode(mode: 'text' | 'image' | 'keyframes') {
 function removeImage(frame: 'start' | 'end') {
   if (frame === 'start') startImage.value = null
   else endImage.value = null
+}
+
+function clearForm() {
+  taskTitle.value = ''
+  prompt.value = ''
+  duration.value = 8
+  aspectRatio.value = '16:9'
+  generationMode.value = 'image'
+  startImage.value = null
+  endImage.value = null
+  promptError.value = ''
+  attachmentError.value = ''
+  startError.value = ''
+  endError.value = ''
+  previewImage.value = null
+  resetConfirmOpen.value = false
 }
 
 function openImagePreview(file: File, src: string, frame: string) {
@@ -226,6 +297,7 @@ async function generate() {
       return form
     },
     extraEvent: { mode: generationMode.value === 'keyframes' ? 'keyframe' : generationMode.value === 'image' ? 'reference' : 'text', duration: String(duration.value), resolution: aspectRatio.value + '/720P', video_model: model },
+    onSuccess: () => clearForm(),
   })
 }
 </script>
@@ -234,11 +306,8 @@ async function generate() {
   <section class="quick-composer-dock fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-8 sm:px-5">
     <div class="pointer-events-auto mx-auto max-w-4xl">
       <div
-        class="studio-composer overflow-hidden rounded-[24px] border bg-paper/95 p-3 shadow-2xl shadow-violet-950/15 backdrop-blur-xl transition sm:p-4"
+        class="studio-composer relative overflow-hidden rounded-[24px] border bg-paper/95 p-3 shadow-2xl shadow-violet-950/15 backdrop-blur-xl transition sm:p-4"
         :class="dragActive ? 'border-violet-500 ring-4 ring-violet-500/10' : 'border-rule/80'"
-        @dragover.prevent="dragActive = true"
-        @dragleave.prevent="dragActive = false"
-        @drop.prevent="onDrop"
       >
         <input ref="startInput" class="hidden" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange($event, 'start')" />
         <input ref="endInput" class="hidden" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange($event, 'end')" />
@@ -248,6 +317,7 @@ async function generate() {
           <input id="quick-task-title" v-model="taskTitle" type="text" maxlength="120" autocomplete="off" class="min-w-0 flex-1 border-0 bg-transparent px-1 py-1.5 text-sm font-medium text-ink outline-none placeholder:text-muted/70 focus:ring-0" placeholder="Título da tarefa (opcional)" aria-label="Título da tarefa, opcional" />
           <div class="flex shrink-0 items-center gap-1" role="tablist" aria-label="Modo de geração">
             <button v-for="option in [{ value: 'text', label: 'Texto' }, { value: 'image', label: 'Imagem' }, { value: 'keyframes', label: 'Início + fim' }]" :key="option.value" type="button" role="tab" :aria-selected="generationMode === option.value" class="rounded-full border px-2.5 py-1.5 text-[11px] font-semibold transition sm:px-3 sm:text-xs" :class="generationMode === option.value ? 'studio-mode-tab-active' : 'border-rule bg-paper text-ink-2 hover:border-violet-300 hover:bg-violet-500/5 hover:text-violet-700'" @click="selectGenerationMode(option.value as 'text' | 'image' | 'keyframes')">{{ option.label }}</button>
+            <button v-if="hasFormContent" type="button" class="ml-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base text-muted/70 transition hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40" :disabled="busy" :aria-label="t('quickClearForm')" :title="t('quickClearForm')" @click="resetConfirmOpen = true">×</button>
           </div>
         </div>
 
@@ -259,7 +329,7 @@ async function generate() {
                 <img :src="startPreview" :alt="`${generationMode === 'keyframes' ? 'Imagem inicial' : 'Imagem de referência'}: ${startImage.name}`" class="h-full w-full object-cover" />
               </button>
               <div class="flex w-full justify-center gap-1">
-                <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-paper-3 hover:text-ink" aria-label="Trocar imagem inicial" title="Trocar imagem" @click="startInput?.click()">↻</button>
+                <button type="button" class="inline-flex items-center justify-center rounded-md p-1 text-muted hover:bg-paper-3 hover:text-ink" aria-label="Trocar imagem inicial" title="Trocar imagem" @click="startInput?.click()"><RefreshIcon size="sm" /></button>
                 <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-red-500/10 hover:text-red-600" aria-label="Remover imagem inicial" title="Remover imagem" @click="removeImage('start')">×</button>
               </div>
             </div>
@@ -269,7 +339,7 @@ async function generate() {
                 <img :src="endPreview" :alt="`Imagem final: ${endImage.name}`" class="h-full w-full object-cover" />
               </button>
               <div class="flex w-full justify-center gap-1">
-                <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-paper-3 hover:text-ink" aria-label="Trocar imagem final" title="Trocar imagem" @click="endInput?.click()">↻</button>
+                <button type="button" class="inline-flex items-center justify-center rounded-md p-1 text-muted hover:bg-paper-3 hover:text-ink" aria-label="Trocar imagem final" title="Trocar imagem" @click="endInput?.click()"><RefreshIcon size="sm" /></button>
                 <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-red-500/10 hover:text-red-600" aria-label="Remover imagem final" title="Remover imagem" @click="removeImage('end')">×</button>
               </div>
             </div>
@@ -287,7 +357,6 @@ async function generate() {
               @input="promptError = ''"
             />
             <span class="pointer-events-none absolute bottom-1 right-2 text-[10px] tabular-nums text-muted/80">{{ promptLength.toLocaleString('pt-BR') }} / 5.000</span>
-            <div v-if="dragActive" class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-violet-500/10 text-sm font-semibold text-violet-700">Solte a imagem para anexar</div>
           </div>
         </div>
 
@@ -317,6 +386,25 @@ async function generate() {
       </div>
     </div>
 
+    <Teleport to="body">
+      <div v-if="dragActive" class="pointer-events-none fixed inset-0 z-[70] grid place-items-center bg-violet-500/10 p-5 backdrop-blur-[1px]">
+        <div class="absolute inset-3 rounded-[28px] border-2 border-dashed border-violet-400/80 sm:inset-5"></div>
+        <span class="relative rounded-full border border-violet-300/70 bg-paper/95 px-6 py-3 text-center text-sm font-semibold text-violet-700 shadow-xl">Solte a imagem em qualquer lugar</span>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="resetConfirmOpen" class="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" @click.self="resetConfirmOpen = false">
+        <div ref="resetModalRef" class="w-full max-w-sm rounded-2xl border border-rule bg-paper p-5 shadow-2xl sm:p-6" role="dialog" aria-modal="true" aria-labelledby="quick-clear-title">
+          <h2 id="quick-clear-title" class="text-base font-semibold text-ink">{{ t('quickClearTitle') }}</h2>
+          <p class="mt-2 text-sm leading-6 text-ink-2">{{ t('quickClearMessage') }}</p>
+          <div class="mt-6 flex justify-end gap-2">
+            <button type="button" class="rounded-full border border-rule px-4 py-2 text-sm font-medium text-ink-2 transition hover:bg-paper-3" @click="resetConfirmOpen = false">{{ t('cancel') }}</button>
+            <button type="button" class="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50" :disabled="busy" @click="clearForm">{{ t('quickClearConfirm') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
     <Teleport to="body">
       <div v-if="previewImage" class="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" @click.self="previewImage = null">
         <div ref="previewModalRef" class="relative w-full max-w-4xl rounded-2xl bg-paper p-3 shadow-2xl sm:p-4" role="dialog" aria-modal="true" :aria-label="`${previewImage.frame}: ${previewImage.name}`">

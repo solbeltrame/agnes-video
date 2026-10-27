@@ -20,21 +20,37 @@ const loading = ref(false)
 let taskListTimer: ReturnType<typeof setInterval> | null = null
 // 1.7：in-flight 守卫，避免慢请求下 5s 轮询请求堆积
 let listInFlight = false
+let refreshAfterInFlight = false
+const deletedTaskIds = new Set<string>()
 
-async function loadTaskList() {
+async function loadTaskList(forceAfterCurrent = false) {
   // 1.7：in-flight 守卫 + loading 状态正确赋值（此前只在 catch 置 false，
   // 正常路径从不置 true，loading 从未真正生效）
-  if (listInFlight) return
+  if (listInFlight) {
+    if (forceAfterCurrent) refreshAfterInFlight = true
+    return
+  }
   listInFlight = true
   loading.value = true
   try {
     const d = await api.getTasks()
-    tasks.value = d.tasks || []
+    const receivedTasks = d.tasks || []
+    const receivedIds = new Set(receivedTasks.map((task: TaskListItem) => task.task_id))
+    // Reconcile a pending deletion against a fresh server response. This prevents
+    // an older list request from making a successfully deleted task reappear.
+    for (const taskId of deletedTaskIds) {
+      if (!receivedIds.has(taskId)) deletedTaskIds.delete(taskId)
+    }
+    tasks.value = receivedTasks.filter((task: TaskListItem) => !deletedTaskIds.has(task.task_id))
   } catch (e) {
     // 保留旧列表，不覆盖为失败态（轮询失败静默，下次重试）
   } finally {
     loading.value = false
     listInFlight = false
+    if (refreshAfterInFlight) {
+      refreshAfterInFlight = false
+      void loadTaskList(true)
+    }
   }
 }
 
@@ -120,10 +136,12 @@ async function deleteTaskById(taskId: string) {
   if (!(await confirmAsync(t('deleteTaskConfirm')))) return
   try {
     const d = await api.deleteTask(taskId)
-    if (!d.ok) throw new Error(d.detail || t('failDelete'))
+    if (!d.ok || d.removed_dir === false) throw new Error(d.detail || t('failDelete'))
+    deletedTaskIds.add(taskId)
+    tasks.value = tasks.value.filter((task) => task.task_id !== taskId)
     trackEvent('task_deleted', { task_type: appState.currentTaskType || '', source: 'list' })
     showToast(t('deletedTask'), 3000, 'success')
-    loadTaskList()
+    await loadTaskList(true)
   } catch (e: any) {
     showToast(t('failDelete') + ': ' + e.message, 4500)
   }

@@ -14,6 +14,7 @@ import { appState } from '@/store'
 import * as api from '@/api'
 import { useToast } from '@/composables/useToast'
 import { copyText } from '@/utils/clipboard'
+import RefreshIcon from '@/components/shared/RefreshIcon.vue'
 import {
   RETRY_THRESHOLD,
   getFeedbackOpenOverride,
@@ -252,10 +253,10 @@ onMounted(async () => {
         <button
           v-if="deterministic"
           type="button"
-          class="text-xs px-2 py-1 text-muted underline underline-offset-2 hover:text-ink-2 transition"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted transition hover:bg-paper-3 hover:text-ink-2"
           @click="$emit('retry')"
         >
-          ↻ {{ t('fbRetryBtn') }}
+          <RefreshIcon size="sm" /> {{ t('fbRetryBtn') }}
         </button>
       </div>
 

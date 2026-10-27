@@ -548,9 +548,9 @@ class TestDeleteTask:
     def test_queued_400(self, env):
         app_state._queued_tasks["t1234567890"] = 1
         try:
-            r = env.delete("/api/tasks/t1234567890")
+            r = env.delete("/api/tasks/t1234567890", headers={"X-Agnes-UI-Lang": "en-US"})
             assert r.status_code == 400
-            assert "queued" in r.json()["detail"].lower()
+            assert r.json()["detail"]
         finally:
             _stop_running("t1234567890")
 
@@ -564,6 +564,29 @@ class TestDeleteTask:
         finally:
             _stop_running("t1234567890")
 
+    def test_running_pipeline_without_stop_event_returns_clear_error(self, env):
+        app_state.active_pipelines["t1234567890"] = SimpleNamespace()
+        _register("t1234567890")
+        try:
+            r = env.delete("/api/tasks/t1234567890")
+            assert r.status_code == 400
+            assert r.json()["detail"]
+        finally:
+            _stop_running("t1234567890")
+
+    def test_stopping_pipeline_cannot_be_deleted_until_finalizer_finishes(self, env):
+        stop_event = threading.Event()
+        stop_event.set()
+        app_state.active_pipelines["t1234567890"] = SimpleNamespace(_stop_event=stop_event)
+        _register("t1234567890")
+        task_dir = os.path.join(WORKING_DIR, "t1234567890")
+        try:
+            r = env.delete("/api/tasks/t1234567890")
+            assert r.status_code == 409
+            assert os.path.isdir(task_dir)
+        finally:
+            _stop_running("t1234567890")
+
     def test_success_removes_dir(self, env):
         _register("t1234567890")
         task_dir = os.path.join(WORKING_DIR, "t1234567890")
@@ -574,13 +597,26 @@ class TestDeleteTask:
         assert body["ok"] is True and body["removed_dir"] is True
         assert not os.path.exists(task_dir)
 
-    def test_unsafe_dir_skipped_but_task_exists(self, env, monkeypatch):
-        # 目录逃逸工作区 → 跳过删除；但 _task_exists 为 True → 200 removed_dir=False
+    def test_unsafe_dir_is_rejected(self, env, monkeypatch):
+        # 目录逃逸工作区 → 明确拒绝，不能静默报告删除成功
         monkeypatch.setattr(video_routes.helpers, "find_dir_name", lambda tid: "../evil")
         STORE.tasks = [{"task_id": "t1234567890", "dir_name": "t1234567890"}]
-        r = env.delete("/api/tasks/t1234567890")
-        assert r.status_code == 200
-        assert r.json()["removed_dir"] is False
+        r = env.delete("/api/tasks/t1234567890", headers={"X-Agnes-UI-Lang": "en-US"})
+        assert r.status_code == 400
+        assert r.json()["detail"]
+
+    def test_filesystem_delete_error_is_not_reported_as_success(self, env, monkeypatch):
+        _register("t1234567890")
+        task_dir = os.path.join(WORKING_DIR, "t1234567890")
+
+        def fail_delete(_path):
+            raise PermissionError("file is in use")
+
+        monkeypatch.setattr(video_routes.shutil, "rmtree", fail_delete)
+        r = env.delete("/api/tasks/t1234567890", headers={"X-Agnes-UI-Lang": "en-US"})
+        assert r.status_code == 500
+        assert r.json()["detail"]
+        assert os.path.isdir(task_dir)
 
     def test_task_not_found_404(self, env):
         # dir 不存在 且 不在任务列表 → 404

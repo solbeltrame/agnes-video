@@ -67,6 +67,44 @@ def test_list_includes_task_timestamps_for_recent_activity(client):
     assert task["creative_name"] == "Cena 12"
 
 
+def test_inactive_persisted_running_task_is_reported_as_pending(client):
+    app_client, wd = client
+    _make_task(wd, "stale", "running")
+
+    response = app_client.get("/api/tasks")
+
+    assert response.status_code == 200
+    task = response.json()["tasks"][0]
+    assert task["active"] is False
+    assert task["status"] == "pending"
+    assert app_client.get("/api/tasks", params={"status": "running"}).json()["total"] == 0
+    assert app_client.get("/api/tasks", params={"status": "pending"}).json()["total"] == 1
+
+
+def test_simple_reference_image_is_exposed_and_served(client, monkeypatch):
+    app_client, wd = client
+    uploads = os.path.join(wd, "uploads")
+    os.makedirs(uploads, exist_ok=True)
+    image_path = os.path.join(uploads, "ref.png")
+    with open(image_path, "wb") as image:
+        image.write(b"image-bytes")
+    _make_task(wd, "with-image", "completed")
+    state_path = os.path.join(wd, "d_with-image", "task_state.json")
+    with open(state_path, "r+", encoding="utf-8") as f:
+        state = json.load(f)
+        state["reference_image"] = image_path
+        f.seek(0)
+        json.dump(state, f)
+        f.truncate()
+    monkeypatch.setattr(task_routes.helpers, "get_upload_dir", lambda: uploads)
+
+    listed = app_client.get("/api/tasks").json()["tasks"][0]
+    assert listed["reference_image_url"] == "/api/tasks/with-image/input-images/start"
+    image_response = app_client.get(listed["reference_image_url"])
+    assert image_response.status_code == 200
+    assert image_response.content == b"image-bytes"
+
+
 def test_status_filter(client):
     app_client, wd = client
     for i in range(3):

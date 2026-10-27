@@ -247,6 +247,8 @@ class SimpleVideoTask(BaseTaskState):
     mode: VideoMode = VideoMode.T2V
     reference_image: str = ""
     end_frame_image: str = ""
+    reference_image_name: str = ""
+    end_frame_image_name: str = ""
     duration: int = 5
     # v6.2：2.5 系列模型分辨率档位（720P/960P/2K；v2.0 忽略，默认 720P）
     video_size: str = "720P"

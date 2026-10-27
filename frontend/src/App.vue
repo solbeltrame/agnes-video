@@ -22,6 +22,7 @@ import ConfirmModal from '@/components/ConfirmModal.vue'
 import LangSwitcher from '@/components/shared/LangSwitcher.vue'
 import QuickVideoPanel from '@/components/QuickVideoPanel.vue'
 import ApiKeyModal from '@/components/ApiKeyModal.vue'
+import SettingsIcon from '@/components/shared/SettingsIcon.vue'
 
 const { themeIcon, themeLabel, cycleTheme } = useTheme()
 const { visible: toastVisible, message: toastMessage, type: toastType } = useToast()
@@ -32,6 +33,7 @@ const { parseHash } = useNavigation()
 const { loadGallery, startGalleryTimer, stopGalleryTimer } = useGallery()
 const advancedMode = ref(false)
 const apiKeyModalOpen = ref(false)
+const recentTasksEmpty = ref(true)
 
 function switchMainTab(tab: 'create' | 'list' | 'simple' | 'gallery') {
   appState.view = tab
@@ -139,22 +141,26 @@ onMounted(async () => {
           :title="t('quickApiKeyButton')"
           @click="apiKeyModalOpen = true"
         >
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.55 2.55l-.1-.1a1.8 1.8 0 0 0-3.06 1.27v.28a1.8 1.8 0 1 1-3.6 0v-.15A1.8 1.8 0 0 0 7.1 17.7l-.1.1a1.8 1.8 0 1 1-2.55-2.55l.1-.1A1.8 1.8 0 0 0 3.28 12H3.1a1.8 1.8 0 1 1 0-3.6h.15A1.8 1.8 0 0 0 4.52 5.3l-.1-.1a1.8 1.8 0 1 1 2.55-2.55l.1.1A1.8 1.8 0 0 0 10.13 1.5v-.15a1.8 1.8 0 1 1 3.6 0v.15a1.8 1.8 0 0 0 3.06 1.27l.1-.1a1.8 1.8 0 1 1 2.55 2.55l-.1.1A1.8 1.8 0 0 0 20.62 8h.28a1.8 1.8 0 1 1 0 3.6h-.15A1.8 1.8 0 0 0 19.4 15Z" />
-          </svg>
+          <SettingsIcon />
         </button>
         <LangSwitcher />
       </div>
     </header>
     <section class="mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-y-auto pb-[290px] sm:pb-[195px]">
-      <div class="mb-5 flex flex-wrap items-end justify-between gap-3 pt-2">
-        <div>
-          <h1 class="text-xl font-semibold tracking-tight text-ink sm:text-2xl">Atividade recente</h1>
-          <p class="mt-1 text-xs text-muted sm:text-sm">Tarefas em andamento e finalizadas nas últimas 24 horas.</p>
-        </div>
+      <div v-show="recentTasksEmpty" class="mx-auto max-w-3xl pt-12 text-center sm:pt-20">
+        <p class="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-violet-500">Criação de vídeo com IA</p>
+        <h1 class="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Sua ideia em movimento</h1>
+        <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted sm:text-base">Descreva o que você imagina e deixe a Agnes criar o vídeo.</p>
       </div>
-      <TaskListPanel scope="recent" @view-all="switchMainTab('list')" />
+      <div v-show="!recentTasksEmpty">
+        <div class="mb-5 flex flex-wrap items-end justify-between gap-3 pt-2">
+          <div>
+            <h1 class="text-xl font-semibold tracking-tight text-ink sm:text-2xl">Atividade recente</h1>
+            <p class="mt-1 text-xs text-muted sm:text-sm">Tarefas em andamento e finalizadas nas últimas 24 horas.</p>
+          </div>
+        </div>
+        <TaskListPanel scope="recent" @view-all="switchMainTab('list')" @empty-change="recentTasksEmpty = $event" />
+      </div>
     </section>
     <QuickVideoPanel :models-ready="isConfigLoaded" />
   </main>

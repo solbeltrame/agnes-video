@@ -10,6 +10,7 @@ import StepTimeline from './StepTimeline.vue'
 import ArtifactCard from './ArtifactCard.vue'
 import CheckpointDetail from './CheckpointDetail.vue'
 import FeedbackPanel from './FeedbackPanel.vue'
+import RefreshIcon from '@/components/shared/RefreshIcon.vue'
 import { isDeterministicError, isLocalNetworkError } from '@/utils/feedback'
 
 const {
@@ -187,7 +188,7 @@ onUnmounted(() => {
 
 <template>
   <div class="progress-page min-h-screen bg-paper">
-    <ProgressHeader />
+    <ProgressHeader :task-title="taskInfo?.title || taskInfo?.creative_name || ''" />
 
     <div class="mx-auto max-w-5xl px-4 py-6 sm:py-8 lg:flex lg:gap-6">
       <!-- Linha do tempo do processo -->
@@ -239,7 +240,7 @@ onUnmounted(() => {
                   @click="onRetryTask"
                 >
                   <span v-if="retrying" class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true"></span>
-                  <span v-else aria-hidden="true">↻</span>
+                  <RefreshIcon v-else />
                   {{ retrying ? t('resuming') : t('fbRetryBtn') }}
                 </button>
                 <span v-if="retryCount > 0" class="text-xs text-muted">{{ t('fbRetriedN').replace('{n}', String(retryCount)) }}</span>
@@ -265,7 +266,7 @@ onUnmounted(() => {
             </div>
             <button :disabled="retrying" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-600/20 transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-60" @click="onRetryTask">
               <span v-if="retrying" class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true"></span>
-              <span v-else aria-hidden="true">↻</span>
+              <RefreshIcon v-else />
               {{ retrying ? t('resuming') : t('fbRetryBtn') }}
             </button>
           </div>

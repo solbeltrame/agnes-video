@@ -5,8 +5,10 @@ import json
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException
+from fastapi.responses import FileResponse
 
 from core.config import api_key_missing_msg, get_api_key
 from core.i18n_backend import translate
@@ -30,6 +32,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["tasks"])
 
 
+def _reconcile_runtime_status(data: dict, active: bool) -> None:
+    """Avoid showing a persisted running state after its runtime worker exited."""
+    data["active"] = active
+    if not active and data.get("status") in (StepStatus.RUNNING.value, StepStatus.QUEUED.value):
+        # Usually handled on startup. This also covers a worker that exited
+        # unexpectedly while the server remained alive.
+        data["status"] = StepStatus.PENDING.value
+
+
+def _simple_input_image_path(state: SimpleVideoTask, frame: str) -> Path | None:
+    """Resolve an uploaded simple-video frame only from the workspace uploads folder."""
+    field = {"start": "reference_image", "end": "end_frame_image"}.get(frame)
+    if not field:
+        return None
+    raw_path = getattr(state, field, "")
+    if not raw_path:
+        return None
+    uploads_root = Path(helpers.get_upload_dir()).resolve()
+    image_path = Path(raw_path).resolve()
+    try:
+        image_path.relative_to(uploads_root)
+    except ValueError:
+        return None
+    return image_path if image_path.is_file() else None
+
+
+def _simple_input_image_url(task_id: str, state: SimpleVideoTask, frame: str) -> str:
+    if not _simple_input_image_path(state, frame):
+        return ""
+    return f"/api/tasks/{quote(task_id, safe='')}/input-images/{frame}"
+
+
 @router.get("/api/tasks")
 async def list_tasks(limit: int = 0, offset: int = 0, status: str = ""):
     """任务列表（优化路线图 1.4：状态过滤 + 分页）。
@@ -41,6 +75,12 @@ async def list_tasks(limit: int = 0, offset: int = 0, status: str = ""):
     """
     tm = TaskManager("_")
     tasks = tm.list_tasks()
+    for t in tasks:
+        active = (
+            t["task_id"] in app_state.active_pipelines
+            or t["task_id"] in app_state._queued_tasks
+        )
+        _reconcile_runtime_status(t, active)
     # 1.4：状态过滤 + 分页在轻量字段阶段完成，避免为被过滤/截断的任务
     # 做完整状态加载（此前列表对每个任务都做一次 Pydantic 完整校验）
     if status:
@@ -53,13 +93,13 @@ async def list_tasks(limit: int = 0, offset: int = 0, status: str = ""):
         tasks = tasks[:limit]
 
     for t in tasks:
-        t["active"] = (
-            t["task_id"] in app_state.active_pipelines
-            or t["task_id"] in app_state._queued_tasks
-        )
+        active = bool(t["active"])
+        _reconcile_runtime_status(t, active)
         task_tm = TaskManager(t["task_id"], dir_name=t.get("dir_name"))
         state = task_tm.load()
         if state:
+            t["status"] = state.status.value if hasattr(state.status, "value") else state.status
+            _reconcile_runtime_status(t, active)
             t["final_video_file"] = state.final_video_file
             t["creative_name"] = state.creative_name or state.title or t.get("creative_name", "")
             t["title"] = state.title or state.creative_name or t.get("title", "")
@@ -89,6 +129,10 @@ async def list_tasks(limit: int = 0, offset: int = 0, status: str = ""):
             elif isinstance(state, SimpleVideoTask):
                 t["prompt"] = state.prompt[:100] if state.prompt else ""
                 t["mode"] = state.mode
+                t["reference_image_url"] = _simple_input_image_url(t["task_id"], state, "start")
+                t["end_frame_image_url"] = _simple_input_image_url(t["task_id"], state, "end")
+                t["reference_image_name"] = state.reference_image_name or (Path(state.reference_image).name if state.reference_image else "")
+                t["end_frame_image_name"] = state.end_frame_image_name or (Path(state.end_frame_image).name if state.end_frame_image else "")
             # 诗歌视频
             elif isinstance(state, PoetryVideoTask):
                 t["poem_text"] = state.poem_text[:100] if state.poem_text else ""
@@ -110,6 +154,22 @@ async def list_tasks(limit: int = 0, offset: int = 0, status: str = ""):
     return {"tasks": tasks, "total": total}
 
 
+@router.get("/api/tasks/{task_id}/input-images/{frame}")
+async def serve_simple_input_image(task_id: str, frame: str):
+    """Serve uploaded start/end frames for task-list previews, confined to uploads/."""
+    if frame not in {"start", "end"}:
+        raise HTTPException(status_code=404, detail="Input image not found")
+    dir_name = helpers.find_dir_name(task_id)
+    tm = TaskManager(task_id, dir_name=dir_name)
+    state = tm.load()
+    if not isinstance(state, SimpleVideoTask):
+        raise HTTPException(status_code=404, detail="Input image not found")
+    image_path = _simple_input_image_path(state, frame)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="Input image not found")
+    return FileResponse(image_path)
+
+
 @router.get("/api/tasks/{task_id}")
 async def get_task(task_id: str):
     dir_name = helpers.find_dir_name(task_id)
@@ -121,7 +181,7 @@ async def get_task(task_id: str):
     data["dir_name"] = dir_name
     # 后台是否有活跃 pipeline（v6.1）：前端据此区分「运行中/排队中」与
     # 「服务重启后遗留的 pending/queued（需点击续传）」，避免误导用户。
-    data["active"] = task_id in app_state.active_pipelines
+    _reconcile_runtime_status(data, task_id in app_state.active_pipelines)
     # GA 埋点：合并 error_collector 内存聚合的上游报错（按状态码计数，
     # 前端轮询到新增量即上报 api_error 事件）。读合并而非写盘，避免与
     # 流水线自己的 TaskManager 落盘互相覆盖。

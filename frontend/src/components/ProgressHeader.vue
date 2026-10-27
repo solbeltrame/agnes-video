@@ -7,11 +7,13 @@ import { useTasks } from '@/composables/useTasks'
 import { useNavigation } from '@/composables/useNavigation'
 import LangSwitcher from '@/components/shared/LangSwitcher.vue'
 
+const props = defineProps<{ taskTitle?: string }>()
 const { progressPct, awaitingCheckpoint, taskFailed, needsResume } = useProgress()
 const { stopTaskById, switchMode } = useTasks()
 const { goBack, goHome } = useNavigation()
 
 const taskId = computed(() => appState.currentTaskId || appState.progressTaskId || '')
+const displayTitle = computed(() => props.taskTitle?.trim() || `${t('task_')} ${taskId.value}`)
 const dirName = computed(() => appState.currentDirName || '')
 
 const typeLabelKey: Record<string, string> = {
@@ -64,7 +66,7 @@ async function onSwitchAuto() {
           <span class="shrink-0 rounded-full bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-600">
           {{ t(typeLabelKey[appState.currentTaskType] || '') || appState.currentTaskType }}
           </span>
-          <span class="truncate text-sm font-semibold text-ink">{{ t('task_') }} {{ taskId }}</span>
+          <span class="truncate text-sm font-semibold text-ink" :title="displayTitle">{{ displayTitle }}</span>
         </div>
         <span v-if="dirName" class="mt-0.5 hidden truncate text-[10px] text-muted sm:block">{{ dirName }}</span>
       </div>

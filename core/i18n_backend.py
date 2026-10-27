@@ -280,6 +280,36 @@ CATALOG: Dict[str, Dict[str, str]] = {
         "zh": "任务排队中...",
         "en": "Task queued...",
     },
+    "task.delete_running": {
+        "zh": "任务仍在运行，请先停止任务再删除。",
+        "en": "This task is still running. Stop it before deleting it.",
+        "pt": "Esta tarefa ainda está em andamento. Pare-a antes de excluir.",
+    },
+    "task.delete_stopping": {
+        "zh": "任务正在停止，请稍后再试。",
+        "en": "This task is stopping. Wait a moment, then try again.",
+        "pt": "A tarefa está sendo interrompida. Aguarde um instante e tente novamente.",
+    },
+    "task.delete_queued": {
+        "zh": "任务仍在队列中，请先停止任务再删除。",
+        "en": "This task is still queued. Stop it before deleting it.",
+        "pt": "Esta tarefa ainda está na fila. Pare-a antes de excluir.",
+    },
+    "task.delete_unsafe_path": {
+        "zh": "任务路径不安全，已取消删除。",
+        "en": "The task path is unsafe, so deletion was cancelled.",
+        "pt": "O caminho da tarefa não é seguro; a exclusão foi cancelada.",
+    },
+    "task.delete_files_failed": {
+        "zh": "无法删除任务文件。请确认文件未被占用后重试。",
+        "en": "Task files could not be deleted. Check whether they are in use, then try again.",
+        "pt": "Não foi possível excluir os arquivos da tarefa. Verifique se estão em uso e tente novamente.",
+    },
+    "task.delete_files_remain": {
+        "zh": "删除后仍有任务文件残留。请重试或检查文件权限。",
+        "en": "Task files remain on disk after deletion. Try again or check file permissions.",
+        "pt": "Ainda restaram arquivos da tarefa após a exclusão. Tente novamente ou verifique as permissões.",
+    },
     "task.interrupted_resumable": {
         "zh": "任务已被中断，可从任务列表续传",
         "en": "Task interrupted. You can resume it from the task list.",
