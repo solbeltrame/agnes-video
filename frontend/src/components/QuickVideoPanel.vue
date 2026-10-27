@@ -291,7 +291,6 @@ async function generate() {
           </div>
         </div>
 
-        <p v-if="generationMode === 'keyframes' && hasTwoFrames" class="mb-2 text-[11px] font-medium text-violet-600">Transição: imagem inicial → imagem final</p>
         <p v-if="promptError || attachmentError || startError || endError" class="mb-2 text-xs text-red-600" role="alert">{{ promptError || attachmentError || startError || endError }}</p>
 
         <div class="flex flex-wrap items-center gap-2">

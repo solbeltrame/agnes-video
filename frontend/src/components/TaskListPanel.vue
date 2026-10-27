@@ -173,22 +173,24 @@ function onMainBtn(task: TaskListItem) {
       class="studio-task-card flex flex-col gap-4 rounded-2xl border border-rule/70 bg-paper p-4 shadow-sm transition hover:border-violet-300/70 hover:shadow-md sm:p-5 lg:flex-row lg:items-center lg:justify-between"
     >
       <div class="flex-1 min-w-0">
-        <div class="mb-2 flex flex-wrap items-center gap-2">
-          <span class="rounded-full bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-600">
-            {{ t(typeLabelKey[task.task_type || ''] || '') || task.task_type }}
-          </span>
-          <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold" :class="statusTone(task)">
-            {{ t(statusKey(task)) || task.status }}
-          </span>
-          <!-- v6.0 模式徽标 -->
-          <span v-if="task.awaiting_user" class="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-600">
-            {{ t('awaitingUser') }}
-          </span>
-          <span v-else-if="task.current_mode === 'manual'" class="rounded-full bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-600">
-            ✋ {{ t('execManual') }}
-          </span>
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <p class="min-w-0 flex-1 truncate text-base font-semibold text-ink">{{ task.title || task.creative_name || task.task_id }}</p>
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <span class="rounded-full bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-600">
+              {{ t(typeLabelKey[task.task_type || ''] || '') || task.task_type }}
+            </span>
+            <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold" :class="statusTone(task)">
+              {{ t(statusKey(task)) || task.status }}
+            </span>
+            <!-- v6.0 模式徽标 -->
+            <span v-if="task.awaiting_user" class="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-600">
+              {{ t('awaitingUser') }}
+            </span>
+            <span v-else-if="task.current_mode === 'manual'" class="rounded-full bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-600">
+              ✋ {{ t('execManual') }}
+            </span>
+          </div>
         </div>
-        <p class="truncate text-base font-semibold text-ink">{{ task.title || task.creative_name || task.task_id }}</p>
         <p class="mt-1 truncate text-xs text-muted">{{ taskDesc(task) || task.task_id }}{{ taskExtra(task) }}</p>
         <p v-if="taskStatusDetail(task)" class="mt-2 line-clamp-2 text-xs leading-5" :class="task.status === 'failed' ? 'text-red-600' : task.current_message_key === 'progress.video.queue_full' ? 'text-amber-700' : 'text-muted'">
           {{ taskStatusDetail(task) }}
