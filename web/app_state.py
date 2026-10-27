@@ -99,6 +99,10 @@ active_pipelines: Dict[str, object] = {}
 # task_id -> asyncio.Lock, 串行化 create/resume/stop，避免并发操作同一任务导致
 # 旧 pipeline 的 finally 误删新 pipeline、或同任务双重运行。
 _pipeline_locks: Dict[str, asyncio.Lock] = {}
+# Serialize actual executions for one task. The route lock protects scheduling;
+# this lock remains held through queue wait and pipeline completion so a stale
+# second runner cannot overlap the first execution.
+_pipeline_execution_locks: Dict[str, asyncio.Lock] = {}
 # 后台任务强引用集合，防止 GC 回收运行中的协程
 background_tasks: Set[asyncio.Task] = set()
 # 优雅退出事件（Ctrl+C 两次强制退出）
@@ -153,6 +157,15 @@ def get_pipeline_lock(task_id: str) -> asyncio.Lock:
     if lock is None:
         lock = asyncio.Lock()
         _pipeline_locks[task_id] = lock
+    return lock
+
+
+def get_pipeline_execution_lock(task_id: str) -> asyncio.Lock:
+    """Return the per-task lock held for the full lifetime of a pipeline run."""
+    lock = _pipeline_execution_locks.get(task_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _pipeline_execution_locks[task_id] = lock
     return lock
 
 

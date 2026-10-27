@@ -1,5 +1,9 @@
 {
   "progressSimpleStart": "Iniciando a geração de vídeo...",
+  "deleteWaitingForStop": "A tarefa está encerrando. Vou concluir a exclusão assim que a interrupção terminar.",
+  "deleteStopTimeout": "A tarefa ainda está encerrando. Tente excluí-la novamente em instantes.",
+  "task.stopping": "Interrompendo a tarefa...",
+  "task.stopped": "Tarefa parada. Ela só continuará quando você clicar em Retomar.",
   "subtitle": "Vídeo IA, um clique",
   "apiKeyTitle": "Chave API",
   "quickApiKeyButton": "Configurar API Key",

@@ -124,6 +124,8 @@ function statusTone(task: TaskListItem): string {
 }
 
 function taskStatusDetail(task: TaskListItem): string {
+  // Uma tarefa concluída não deve continuar exibindo mensagens antigas de retry.
+  if (isCompleted(task)) return ''
   const key = task.current_message_key || ''
   if (key === 'task.queued') return t('statusQueued')
   if (key) {
@@ -223,7 +225,7 @@ function openTask(task: TaskListItem) {
           <div class="mb-2 flex flex-wrap items-center gap-x-2 gap-y-2">
             <p class="min-w-0 max-w-full truncate text-base font-semibold text-ink">{{ task.title || task.creative_name || task.task_id }}</p>
             <div class="inline-flex shrink-0 flex-wrap items-center gap-2">
-              <span class="rounded-full bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-600">
+              <span v-if="task.task_type !== 'simple'" class="rounded-full bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-600">
                 {{ t(typeLabelKey[task.task_type || ''] || '') || task.task_type }}
               </span>
               <span class="rounded-full px-2.5 py-1 text-[11px] font-semibold" :class="statusTone(task)">
@@ -271,7 +273,12 @@ function openTask(task: TaskListItem) {
           <RefreshIcon :class="{ 'animate-spin': retryingTaskId === task.task_id }" />
           {{ retryingTaskId === task.task_id ? t('resuming') : t('fbRetryBtn') }}
         </button>
-        <button v-else class="text-xs px-3 py-1.5 bg-accent text-accent-ink hover:bg-accent/90 rounded-lg transition" @click.stop="onMainBtn(task)">
+        <button
+          v-else
+          class="text-xs px-3 py-1.5 rounded-lg transition"
+          :class="isCompleted(task) ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-accent text-accent-ink hover:bg-accent/90'"
+          @click.stop="onMainBtn(task)"
+        >
           {{ mainBtnLabel(task) }}
         </button>
         <button

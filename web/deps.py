@@ -140,6 +140,14 @@ async def run_pipeline(pipeline: BasePipeline, state: BaseTaskState):
         logger.info(f"[Pipeline] Completed run for task {pipeline.task_id}")
     except PipelineShutdown:
         logger.info(f"[Pipeline] Task {pipeline.task_id} stopped by user")
+        ui_lang = getattr(state, "ui_language", "") or "zh"
+        pipeline.task_manager.update_state(
+            status=StepStatus.PENDING,
+            current_status="stopped",
+            current_message=translate("task.stopped", ui_lang),
+            current_message_key="task.stopped",
+            current_message_params={},
+        )
     except Exception as e:
         logger.error(f"[Pipeline] Task {pipeline.task_id} failed: {e}", exc_info=True)
     finally:
@@ -150,7 +158,7 @@ async def run_pipeline(pipeline: BasePipeline, state: BaseTaskState):
             del app_state.active_pipelines[pipeline.task_id]
 
 
-async def run_pipeline_with_concurrency(
+async def _run_pipeline_with_concurrency_locked(
     pipeline: BasePipeline,
     state: BaseTaskState,
     task_manager: TaskManager,
@@ -166,6 +174,32 @@ async def run_pipeline_with_concurrency(
     weight = app_state.TASK_TYPE_WEIGHTS.get(state.task_type, 1)
     task_id = pipeline.task_id
     semaphore = app_state.get_semaphore()
+
+    def task_is_completed() -> bool:
+        # A delayed/duplicate background runner must never turn a finished task
+        # back into QUEUED/RUNNING. Reload from disk because this worker may have
+        # waited while another execution completed the same task.
+        latest = task_manager.load()
+        latest_status = getattr(latest, "status", None)
+        if hasattr(latest_status, "value"):
+            latest_status = latest_status.value
+        state_status = getattr(state, "status", None)
+        if hasattr(state_status, "value"):
+            state_status = state_status.value
+        return (
+            latest_status == StepStatus.COMPLETED.value
+            or state_status == StepStatus.COMPLETED.value
+        )
+
+    def forget_pipeline_if_current() -> None:
+        if app_state.active_pipelines.get(task_id) is pipeline:
+            app_state.active_pipelines.pop(task_id, None)
+
+    if task_is_completed():
+        logger.info("[Concurrency] Task %s is already completed; skipping stale runner", task_id)
+        forget_pipeline_if_current()
+        return
+
     app_state._queued_tasks[task_id] = weight
     # v7.0（issue #64）：任务级 UI 语言快照，保证异步执行期间消息语种稳定
     ui_lang = getattr(state, "ui_language", "") or "zh"
@@ -222,6 +256,13 @@ async def run_pipeline_with_concurrency(
             logger.info(f"[Concurrency] Task {task_id} was stopped while queued, skipping")
             return
 
+        # The task may have completed while this worker was waiting for a slot.
+        # Recheck immediately before invoking the pipeline so its run() method
+        # cannot overwrite COMPLETED with RUNNING.
+        if task_is_completed():
+            logger.info("[Concurrency] Task %s completed while queued; skipping stale runner", task_id)
+            return
+
         # 启动 pipeline
         await run_pipeline(pipeline, state)
     except asyncio.CancelledError:
@@ -255,6 +296,19 @@ async def run_pipeline_with_concurrency(
             except Exception:
                 pass
         app_state._queued_tasks.pop(task_id, None)
+        forget_pipeline_if_current()
+
+
+async def run_pipeline_with_concurrency(
+    pipeline: BasePipeline,
+    state: BaseTaskState,
+    task_manager: TaskManager,
+):
+    """Serialize task runs and skip stale runners after a result is complete."""
+    task_id = pipeline.task_id
+    execution_lock = app_state.get_pipeline_execution_lock(task_id)
+    async with execution_lock:
+        await _run_pipeline_with_concurrency_locked(pipeline, state, task_manager)
 
 
 # 下划线别名：兼容旧代码 ``from server import _create_pipeline_for_type`` 等导入

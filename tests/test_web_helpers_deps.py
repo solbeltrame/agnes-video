@@ -536,8 +536,10 @@ class TestRunPipelineWithConcurrency:
     @pytest.fixture(autouse=True)
     def _clean(self):
         app_state._queued_tasks.clear()
+        app_state._pipeline_execution_locks.clear()
         yield
         app_state._queued_tasks.clear()
+        app_state._pipeline_execution_locks.clear()
 
     def _patch(self, monkeypatch, semaphore, weights=None):
         monkeypatch.setattr(
@@ -580,6 +582,86 @@ class TestRunPipelineWithConcurrency:
         assert ran == ["tid"]
         assert sem.released == 1
         assert "tid" not in app_state._queued_tasks
+
+    def test_completed_task_does_not_start_stale_runner(self, monkeypatch):
+        sem = FakeSemaphore(max_weight=10)
+        ran = self._patch(monkeypatch, sem, weights={TaskType.CREATIVE: 1})
+        completed = _make_state()
+        completed.status = StepStatus.COMPLETED
+        tm = MagicMock()
+        tm.load.return_value = completed
+        pipeline = FakePipeline("tid")
+        app_state.active_pipelines["tid"] = pipeline
+
+        _run(deps.run_pipeline_with_concurrency(pipeline, completed, tm))
+
+        assert ran == []
+        assert tm.update_state.call_count == 0
+        assert sem.current == 0
+        assert "tid" not in app_state._queued_tasks
+        assert "tid" not in app_state.active_pipelines
+
+    def test_task_completed_while_waiting_is_not_restarted(self, monkeypatch):
+        sem = FakeSemaphore(max_weight=10)
+        ran = self._patch(monkeypatch, sem, weights={TaskType.CREATIVE: 1})
+        state = _make_state()
+        completed = _make_state()
+        completed.status = StepStatus.COMPLETED
+        tm = MagicMock()
+        tm.load.side_effect = [state, completed]
+        pipeline = FakePipeline("tid")
+        app_state.active_pipelines["tid"] = pipeline
+
+        _run(deps.run_pipeline_with_concurrency(pipeline, state, tm))
+
+        assert ran == []
+        assert sem.released == 1
+        assert "tid" not in app_state._queued_tasks
+        assert "tid" not in app_state.active_pipelines
+
+    def test_duplicate_runner_waits_then_skips_completed_task(self, monkeypatch):
+        sem = FakeSemaphore(max_weight=10)
+        monkeypatch.setattr(deps.app_state, "get_semaphore", lambda: sem)
+        monkeypatch.setattr(
+            deps.app_state, "TASK_TYPE_WEIGHTS", {TaskType.CREATIVE: 1}
+        )
+        state = _make_state()
+        tm = MagicMock()
+        tm.load.return_value = state
+        first = FakePipeline("tid")
+        duplicate = FakePipeline("tid")
+        app_state.active_pipelines["tid"] = duplicate
+        started = asyncio.Event()
+        finish_first = asyncio.Event()
+        runs = []
+
+        async def fake_run(pipeline, _state):
+            runs.append(pipeline)
+            if pipeline is first:
+                started.set()
+                await finish_first.wait()
+                state.status = StepStatus.COMPLETED
+
+        monkeypatch.setattr(deps, "run_pipeline", fake_run)
+
+        async def scenario():
+            first_run = asyncio.create_task(
+                deps.run_pipeline_with_concurrency(first, state, tm)
+            )
+            await started.wait()
+            duplicate_run = asyncio.create_task(
+                deps.run_pipeline_with_concurrency(duplicate, state, tm)
+            )
+            await asyncio.sleep(0)
+            finish_first.set()
+            await asyncio.gather(first_run, duplicate_run)
+
+        _run(scenario())
+
+        assert runs == [first]
+        assert state.status == StepStatus.COMPLETED
+        assert "tid" not in app_state._queued_tasks
+        assert "tid" not in app_state.active_pipelines
 
     def test_stopped_while_queued_skips_run(self, monkeypatch):
         sem = FakeSemaphore(max_weight=10)

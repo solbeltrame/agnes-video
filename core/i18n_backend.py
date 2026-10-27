@@ -280,6 +280,16 @@ CATALOG: Dict[str, Dict[str, str]] = {
         "zh": "任务排队中...",
         "en": "Task queued...",
     },
+    "task.stopping": {
+        "zh": "任务正在停止...",
+        "en": "Stopping task...",
+        "pt": "Interrompendo a tarefa...",
+    },
+    "task.stopped": {
+        "zh": "任务已停止。点击“恢复”后才会继续。",
+        "en": "Task stopped. It will continue only after you click Resume.",
+        "pt": "Tarefa parada. Ela só continuará quando você clicar em Retomar.",
+    },
     "task.delete_running": {
         "zh": "任务仍在运行，请先停止任务再删除。",
         "en": "This task is still running. Stop it before deleting it.",
@@ -411,8 +421,9 @@ CATALOG: Dict[str, Dict[str, str]] = {
         "pt": "Iniciando a geração de vídeo...",
     },
     "progress.simple.done": {
-        "zh": "视频生成完成!",
+        "zh": "Video generation complete!",
         "en": "Video generation complete!",
+        "pt": "Vídeo concluído!",
     },
     "progress.simple.resume_polling": {
         "zh": "恢复轮询视频任务 {vid}...",

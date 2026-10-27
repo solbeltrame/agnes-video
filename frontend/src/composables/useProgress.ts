@@ -120,6 +120,9 @@ function setProgressMessageHtml(html: string) {
  */
 function renderBackendMessage(state: TaskState): string {
   const key = state.current_message_key || ''
+  // O backend pode persistir esta mensagem em inglês/chinês para tarefas antigas;
+  // o rótulo de conclusão já existe no catálogo da interface.
+  if (key === 'progress.simple.done') return t('videoComplete')
   if (key) {
     const rendered = tf(key, state.current_message_params || {})
     // tf 未命中会原样返回 key —— 此时必须回退，不能把 key 显示给用户
@@ -202,10 +205,7 @@ async function mountProgressPage(taskId: string, dirName?: string | null) {
     }
     startPolling(taskId)
   } else if (st === 'completed') {
-    if (state.final_video_file) showResult(state.final_video_file, taskId)
-    clearRetryCount(taskId)
-    retryCount.value = 0
-    clearRunning()
+    showCompletedState(state, taskId)
   } else if (st === 'failed') {
     taskFailed.value = true
     applyFailedMessage(state)
@@ -324,10 +324,7 @@ async function pollTaskProgress(taskId: string) {
         // simple 任务携带生成模式（t2v / i2v / ti2vid / keyframes），便于 GA 按模式统计生成量
         ...(state.mode ? { mode: state.mode } : {}),
       })
-      showResult(state.final_video_file, taskId)
-      clearRetryCount(taskId)
-      retryCount.value = 0
-      clearRunning()
+      showCompletedState(state, taskId)
       scheduleArtifactRefresh()
     }
 
@@ -345,6 +342,14 @@ async function pollTaskProgress(taskId: string) {
       taskFailed.value = true
       applyFailedMessage(state)
       retryCount.value = getRetryCount(taskId)
+    }
+
+    if (state.status === 'pending' && state.current_status === 'stopped') {
+      needsResume.value = true
+      taskFailed.value = false
+      awaitingCheckpoint.value = ''
+      appState.isTaskRunning = false
+      stopPolling()
     }
 
     // v6.0 手动模式：检测暂停等待（PENDING + current_checkpoint）
@@ -406,6 +411,15 @@ function showResult(videoPath?: string, taskId?: string | null) {
     resultVideoVisible.value = true
     resultVideoSrc.value = '/api/video/' + taskId
   }
+}
+
+function showCompletedState(state: TaskState, taskId: string) {
+  progressPct.value = 100
+  progressMessage.value = escapeHtml(t('videoComplete'))
+  if (state.final_video_file) showResult(state.final_video_file, taskId)
+  clearRetryCount(taskId)
+  retryCount.value = 0
+  clearRunning()
 }
 
 function setRunning(taskId: string) {

@@ -12,7 +12,7 @@ const { containerRef } = useModalA11y(visible, confirmNo)
     <div
       v-if="visible"
       ref="containerRef"
-      class="fixed inset-0 z-[60] flex items-center justify-center"
+      class="fixed inset-0 z-[100] flex items-center justify-center"
       role="dialog"
       aria-modal="true"
       :aria-label="title || message"

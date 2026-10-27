@@ -97,7 +97,7 @@ onMounted(() => {
         <div class="p-3">
           <div class="flex items-center justify-between gap-2 mb-1">
             <span class="text-sm font-medium text-ink truncate">{{ it.title }}</span>
-            <span class="text-xs" :class="statusColors[it.status] || 'text-muted'">
+            <span v-if="it.task_type !== 'simple'" class="text-xs" :class="statusColors[it.status] || 'text-muted'">
               {{ t((typeLabelKey as any)[it.task_type] || 'typeCreative') }}
             </span>
           </div>

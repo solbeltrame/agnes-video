@@ -1,5 +1,9 @@
 {
   "progressSimpleStart": "Starting video generation...",
+  "deleteWaitingForStop": "The task is shutting down. I’ll finish deleting it as soon as it stops.",
+  "deleteStopTimeout": "The task is still shutting down. Try deleting it again in a moment.",
+  "task.stopping": "Stopping task...",
+  "task.stopped": "Task stopped. It will continue only after you click Resume.",
   "subtitle": "AI Video, One Click",
   "apiKeyTitle": "API Key Configuration",
   "quickApiKeyButton": "Configure API Key",

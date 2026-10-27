@@ -135,8 +135,21 @@ async function stopTaskById(taskId: string) {
 async function deleteTaskById(taskId: string) {
   if (!(await confirmAsync(t('deleteTaskConfirm')))) return
   try {
-    const d = await api.deleteTask(taskId)
-    if (!d.ok || d.removed_dir === false) throw new Error(d.detail || t('failDelete'))
+    const stopWaitDeadline = Date.now() + 90_000
+    let waitingForStop = false
+    let d: any
+    while (true) {
+      d = await api.deleteTask(taskId)
+      if (d.ok) break
+      if (d.status_code !== 409) throw new Error(d.detail || t('failDelete'))
+      if (Date.now() >= stopWaitDeadline) throw new Error(t('deleteStopTimeout'))
+      if (!waitingForStop) {
+        waitingForStop = true
+        showToast(t('deleteWaitingForStop'), 4000)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+    if (d.removed_dir === false) throw new Error(d.detail || t('failDelete'))
     deletedTaskIds.add(taskId)
     tasks.value = tasks.value.filter((task) => task.task_id !== taskId)
     trackEvent('task_deleted', { task_type: appState.currentTaskType || '', source: 'list' })

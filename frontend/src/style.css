@@ -14,9 +14,9 @@
     --color-ink-2:    oklch(78% 0.012 60);
     --color-muted:    oklch(64% 0.014 60);
     --color-rule:     oklch(30% 0.014 55);
-    --color-accent:   oklch(80% 0.14 75);
-    --color-accent-ink: oklch(20% 0.05 75);
-    --color-focus:    oklch(82% 0.16 75);
+    --color-accent:   oklch(64% 0.19 295);
+    --color-accent-ink: oklch(98% 0.008 300);
+    --color-focus:    oklch(74% 0.16 295);
     --color-danger:   oklch(66% 0.19 27);
     --color-success:  oklch(80% 0.13 152);
     --color-warning:  oklch(80% 0.13 75);
@@ -24,7 +24,7 @@
     --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
   }
 
-  /* 亮色——同族反转：hue 55 暖灰家族 + accent 加深保证对比度（与官网一致） */
+  /* 亮色——保持中性表面，并加深紫色强调色以确保按钮文字对比度。 */
   [data-theme='light'] {
     --color-paper:    oklch(97% 0.008 60);
     --color-paper-2:  oklch(100% 0.004 60);
@@ -33,9 +33,9 @@
     --color-ink-2:    oklch(43% 0.016 55);
     --color-muted:    oklch(55% 0.016 55);
     --color-rule:     oklch(87% 0.012 60);
-    --color-accent:   oklch(52% 0.13 75);
-    --color-accent-ink: oklch(98% 0.008 75);
-    --color-focus:    oklch(48% 0.15 75);
+    --color-accent:   oklch(52% 0.20 295);
+    --color-accent-ink: oklch(98% 0.008 300);
+    --color-focus:    oklch(46% 0.18 295);
     --color-danger:   oklch(50% 0.19 27);
     --color-success:  oklch(50% 0.13 152);
     --color-warning:  oklch(52% 0.13 75);
@@ -78,7 +78,7 @@
     transform: translateY(-1px);
   }
 
-  /* ── Primary Button（琥珀金填充，无渐变无 glow）── */
+  /* ── Primary Button（品牌紫填充，无渐变无 glow）── */
   .glow-btn {
     position: relative;
     overflow: hidden;

@@ -376,8 +376,15 @@ async def stop_task(task_id: str):
     tm = TaskManager(task_id, dir_name=dir_name)
     state = tm.load()
     if state and state.status in (StepStatus.RUNNING, StepStatus.QUEUED):
-        tm.update_state(status=StepStatus.PENDING)
-        logger.info("[Stop] Task %s status -> pending", safe_log(task_id))
+        ui_lang = getattr(state, "ui_language", "") or "zh"
+        tm.update_state(
+            status=StepStatus.PENDING,
+            current_status="stopping",
+            current_message=translate("task.stopping", ui_lang),
+            current_message_key="task.stopping",
+            current_message_params={},
+        )
+        logger.info("[Stop] Task %s status -> pending/stopping", safe_log(task_id))
 
     logger.info("[Stop] Task %s stop requested", safe_log(task_id))
     return {"ok": True, "task_id": task_id}
@@ -463,14 +470,32 @@ async def switch_task_mode(task_id: str, mode: str = Form(...)):
                 "current_checkpoint": checkpoint, "changed": True}
 
     # ── mode == "auto"：手动变自动，切换即继续 ──
-    was_paused = mc.enabled and state.status == StepStatus.PENDING and bool(mc.current_checkpoint)
+    was_paused = (
+        mc.enabled
+        and state.status == StepStatus.PENDING
+        and state.current_status == "awaiting_user"
+        and bool(mc.current_checkpoint)
+    )
+    is_stopped = (
+        state.status == StepStatus.PENDING
+        and state.current_status in {"stopping", "stopped"}
+    )
     mc.pause_points = []
     mc.current_checkpoint = ""
-    tm.update_state(
-        manual_config=mc,
-        current_status="resumed",
-        current_message=translate("mode.switched_to_auto", ui_lang),
-    )
+    update_fields = {"manual_config": mc}
+    if is_stopped:
+        update_fields.update(
+            current_status=state.current_status,
+            current_message=translate("task.stopped", ui_lang),
+            current_message_key="task.stopped",
+            current_message_params={},
+        )
+    else:
+        update_fields.update(
+            current_status="resumed",
+            current_message=translate("mode.switched_to_auto", ui_lang),
+        )
+    tm.update_state(**update_fields)
     logger.info("[Mode] Task %s switched to auto (was_paused=%s)",
                 safe_log(task_id), was_paused)
 

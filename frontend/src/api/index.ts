@@ -196,7 +196,10 @@ export function stopTask(taskId: string) {
   return apiFetch('/api/tasks/' + taskId + '/stop', { method: 'POST' }).then((r) => r.json())
 }
 export function deleteTask(taskId: string) {
-  return apiFetch('/api/tasks/' + taskId, { method: 'DELETE' }).then((r) => r.json())
+  return apiFetch('/api/tasks/' + taskId, { method: 'DELETE' }).then(async (r) => ({
+    ...(await r.json()),
+    status_code: r.status,
+  }))
 }
 
 // ── v6.1 问题反馈：任务诊断（二期）──
