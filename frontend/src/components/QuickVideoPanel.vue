@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { appState } from '@/store'
 import { useTaskSubmit } from '@/composables/useTaskSubmit'
 import { useConfig } from '@/composables/useConfig'
+import { useModalA11y } from '@/composables/useModalA11y'
 
-const emit = defineEmits<{ advanced: [] }>()
 const props = defineProps<{ modelsReady: boolean }>()
 const submitter = useTaskSubmit()
 const { saveModels } = useConfig()
@@ -21,12 +21,17 @@ const startPreview = ref('')
 const endPreview = ref('')
 const startError = ref('')
 const endError = ref('')
-const dragActive = ref<'start' | 'end' | null>(null)
+const dragActive = ref(false)
 const startInput = ref<HTMLInputElement | null>(null)
 const endInput = ref<HTMLInputElement | null>(null)
+const addImagesInput = ref<HTMLInputElement | null>(null)
 const promptError = ref('')
+const attachmentError = ref('')
 const modelSaving = ref(false)
+const previewImage = ref<{ src: string; name: string; frame: string } | null>(null)
+const previewOpen = computed(() => previewImage.value !== null)
 const supportedExtensions = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'])
+const { containerRef: previewModalRef } = useModalA11y(previewOpen, () => { previewImage.value = null })
 
 watch(
   () => [props.modelsReady, appState.modelListCache.video, appState.models.video] as const,
@@ -42,6 +47,10 @@ watch(
 
 const busy = computed(() => submitter.submitting.value)
 const promptLength = computed(() => prompt.value.length)
+const durationIndex = computed({
+  get: () => durations.indexOf(duration.value),
+  set: (index: number) => { duration.value = durations[index] ?? 8 },
+})
 const hasImageError = computed(() => !!(startError.value || endError.value))
 const hasTwoFrames = computed(() => !!startImage.value && !!endImage.value)
 const videoModels = computed(() => appState.modelListCache.video || [])
@@ -111,14 +120,60 @@ function onFileChange(event: Event, frame: 'start' | 'end') {
   input.value = ''
 }
 
-function onDrop(event: DragEvent, frame: 'start' | 'end') {
-  dragActive.value = null
-  chooseImage(event.dataTransfer?.files?.[0], frame)
+function onAddImagesChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  addImages(Array.from(input.files || []))
+  input.value = ''
+}
+
+function onDrop(event: DragEvent) {
+  dragActive.value = false
+  addImages(Array.from(event.dataTransfer?.files || []))
+}
+
+function addImages(files: File[]) {
+  attachmentError.value = ''
+  const images = files.filter((file) => {
+    const extension = file.name.split('.').pop()?.toLowerCase() || ''
+    return supportedExtensions.has(extension)
+  })
+  if (images.length !== files.length) {
+    attachmentError.value = 'Alguns arquivos foram ignorados. Use PNG, JPG, WebP, GIF ou BMP.'
+  }
+  if (!images.length) return
+
+  if (images.length > 1) {
+    generationMode.value = 'keyframes'
+    startImage.value = images[0]
+    endImage.value = images[1]
+    if (images.length > 2) attachmentError.value = 'Use no máximo duas imagens: uma inicial e uma final.'
+    return
+  }
+
+  const [image] = images
+  if (generationMode.value === 'text') generationMode.value = 'image'
+  if (generationMode.value === 'keyframes' && startImage.value) endImage.value = image
+  else startImage.value = image
+}
+
+function selectGenerationMode(mode: 'text' | 'image' | 'keyframes') {
+  generationMode.value = mode
+  attachmentError.value = ''
+  if (mode === 'text') {
+    startImage.value = null
+    endImage.value = null
+  } else if (mode === 'image') {
+    endImage.value = null
+  }
 }
 
 function removeImage(frame: 'start' | 'end') {
   if (frame === 'start') startImage.value = null
   else endImage.value = null
+}
+
+function openImagePreview(file: File, src: string, frame: string) {
+  previewImage.value = { src, name: file.name, frame }
 }
 
 async function generate() {
@@ -149,8 +204,9 @@ async function generate() {
     buildForm: () => {
       const form = new FormData()
       const title = taskTitle.value.trim()
-      // task_title é o campo explícito do Modo Rápido. creative_name permanece
-      // para compatibilidade com versões anteriores da API e outras telas.
+      // Envia os aliases usados pelas versões da API; o backend persiste um só
+      // valor canônico em creative_name para a listagem e as telas de progresso.
+      form.append('title', title)
       form.append('task_title', title)
       form.append('creative_name', title)
       form.append('prompt', prompt.value.trim())
@@ -175,164 +231,102 @@ async function generate() {
 </script>
 
 <template>
-  <section class="mx-auto max-w-3xl">
-    <div class="mb-7 text-center sm:mb-9">
-      <p class="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-violet-500">Criação de vídeo com IA</p>
-      <h1 class="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Sua ideia em movimento</h1>
-      <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted sm:text-base">Descreva o que você imagina e deixe a Agnes criar o vídeo.</p>
-    </div>
+  <section class="quick-composer-dock fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-8 sm:px-5">
+    <div class="pointer-events-auto mx-auto max-w-4xl">
+      <div
+        class="studio-composer overflow-hidden rounded-[24px] border bg-paper/95 p-3 shadow-2xl shadow-violet-950/15 backdrop-blur-xl transition sm:p-4"
+        :class="dragActive ? 'border-violet-500 ring-4 ring-violet-500/10' : 'border-rule/80'"
+        @dragover.prevent="dragActive = true"
+        @dragleave.prevent="dragActive = false"
+        @drop.prevent="onDrop"
+      >
+        <input ref="startInput" class="hidden" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange($event, 'start')" />
+        <input ref="endInput" class="hidden" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange($event, 'end')" />
+        <input ref="addImagesInput" class="hidden" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onAddImagesChange" />
 
-    <div class="studio-card space-y-7 rounded-3xl border border-rule/70 bg-paper p-4 shadow-xl shadow-violet-950/5 sm:space-y-8 sm:p-8">
-      <section>
-        <h2 class="mb-3 text-sm font-semibold text-ink">Como deseja criar?</h2>
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3" role="tablist" aria-label="Modo de geração">
-          <button v-for="option in [{ value: 'text', label: 'Texto para vídeo' }, { value: 'image', label: 'Imagem para vídeo' }, { value: 'keyframes', label: 'Primeiro e último frame' }]" :key="option.value" type="button" role="tab" :aria-selected="generationMode === option.value" class="studio-mode-tab rounded-xl border px-3 py-3 text-sm font-medium transition" :class="generationMode === option.value ? 'studio-mode-tab-active' : 'border-rule text-ink-2 hover:border-violet-400'" @click="generationMode = option.value as 'text' | 'image' | 'keyframes'">{{ option.label }}</button>
+        <div class="mb-1 flex items-center justify-between gap-2">
+          <input id="quick-task-title" v-model="taskTitle" type="text" maxlength="120" autocomplete="off" class="min-w-0 flex-1 border-0 bg-transparent px-1 py-1.5 text-sm font-medium text-ink outline-none placeholder:text-muted/70 focus:ring-0" placeholder="Título da tarefa (opcional)" aria-label="Título da tarefa, opcional" />
+          <div class="flex shrink-0 items-center gap-1" role="tablist" aria-label="Modo de geração">
+            <button v-for="option in [{ value: 'text', label: 'Texto' }, { value: 'image', label: 'Imagem' }, { value: 'keyframes', label: 'Início + fim' }]" :key="option.value" type="button" role="tab" :aria-selected="generationMode === option.value" class="rounded-full border px-2.5 py-1.5 text-[11px] font-semibold transition sm:px-3 sm:text-xs" :class="generationMode === option.value ? 'studio-mode-tab-active' : 'border-rule bg-paper text-ink-2 hover:border-violet-300 hover:bg-violet-500/5 hover:text-violet-700'" @click="selectGenerationMode(option.value as 'text' | 'image' | 'keyframes')">{{ option.label }}</button>
+          </div>
         </div>
-      </section>
 
-      <div class="grid gap-4 sm:grid-cols-2 sm:items-start">
-        <section>
-          <label for="quick-task-title" class="mb-2 block text-sm font-semibold text-ink">Título da tarefa <span class="font-normal text-muted">(opcional)</span></label>
-          <input
-            id="quick-task-title"
-            v-model="taskTitle"
-            type="text"
-            maxlength="120"
-            autocomplete="off"
-            class="w-full rounded-xl border border-rule bg-paper px-4 py-3 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10"
-            placeholder="Ex.: Um passeio ao entardecer"
-          />
-        </section>
-        <section>
-          <label for="quick-video-model" class="mb-2 block text-sm font-semibold text-ink">Modelo de vídeo</label>
-          <select id="quick-video-model" :value="selectedVideoModel" :disabled="!modelsReady || !videoModels.length" class="w-full rounded-xl border border-rule bg-paper px-3.5 py-3 text-sm text-ink outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 disabled:opacity-60" @change="onModelChange">
+        <div class="flex items-start gap-2 sm:gap-3">
+          <div v-if="startImage || endImage" class="flex shrink-0 gap-2 pt-1">
+            <div v-if="startImage" class="flex w-[66px] flex-col items-center gap-1 sm:w-[76px]">
+              <span v-if="generationMode === 'keyframes'" class="text-[9px] font-semibold uppercase tracking-wide text-muted">Inicial</span>
+              <button type="button" class="h-[48px] w-full overflow-hidden rounded-lg border border-rule bg-paper-3 transition hover:border-violet-400" :aria-label="`Ampliar imagem inicial: ${startImage.name}`" @click="openImagePreview(startImage, startPreview, generationMode === 'keyframes' ? 'Imagem inicial' : 'Imagem de referência')">
+                <img :src="startPreview" :alt="`${generationMode === 'keyframes' ? 'Imagem inicial' : 'Imagem de referência'}: ${startImage.name}`" class="h-full w-full object-cover" />
+              </button>
+              <div class="flex w-full justify-center gap-1">
+                <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-paper-3 hover:text-ink" aria-label="Trocar imagem inicial" title="Trocar imagem" @click="startInput?.click()">↻</button>
+                <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-red-500/10 hover:text-red-600" aria-label="Remover imagem inicial" title="Remover imagem" @click="removeImage('start')">×</button>
+              </div>
+            </div>
+            <div v-if="endImage" class="flex w-[66px] flex-col items-center gap-1 sm:w-[76px]">
+              <span class="text-[9px] font-semibold uppercase tracking-wide text-muted">Final</span>
+              <button type="button" class="h-[48px] w-full overflow-hidden rounded-lg border border-rule bg-paper-3 transition hover:border-violet-400" :aria-label="`Ampliar imagem final: ${endImage.name}`" @click="openImagePreview(endImage, endPreview, 'Imagem final')">
+                <img :src="endPreview" :alt="`Imagem final: ${endImage.name}`" class="h-full w-full object-cover" />
+              </button>
+              <div class="flex w-full justify-center gap-1">
+                <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-paper-3 hover:text-ink" aria-label="Trocar imagem final" title="Trocar imagem" @click="endInput?.click()">↻</button>
+                <button type="button" class="rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:bg-red-500/10 hover:text-red-600" aria-label="Remover imagem final" title="Remover imagem" @click="removeImage('end')">×</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="relative min-w-0 flex-1">
+            <textarea
+              id="quick-prompt"
+              v-model="prompt"
+              maxlength="5000"
+              rows="2"
+              class="studio-prompt block max-h-36 min-h-[58px] w-full resize-none overflow-y-auto rounded-xl border-0 bg-transparent px-1 py-2 pr-16 pb-6 text-sm leading-6 text-ink outline-none placeholder:text-muted/75 focus:ring-0 sm:text-base"
+              placeholder="Descreva a cena, os movimentos do personagem e o comportamento da câmera..."
+              aria-label="Prompt do vídeo"
+              @input="promptError = ''"
+            />
+            <span class="pointer-events-none absolute bottom-1 right-2 text-[10px] tabular-nums text-muted/80">{{ promptLength.toLocaleString('pt-BR') }} / 5.000</span>
+            <div v-if="dragActive" class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-violet-500/10 text-sm font-semibold text-violet-700">Solte a imagem para anexar</div>
+          </div>
+        </div>
+
+        <p v-if="generationMode === 'keyframes' && hasTwoFrames" class="mb-2 text-[11px] font-medium text-violet-600">Transição: imagem inicial → imagem final</p>
+        <p v-if="promptError || attachmentError || startError || endError" class="mb-2 text-xs text-red-600" role="alert">{{ promptError || attachmentError || startError || endError }}</p>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-rule bg-paper text-xl text-ink-2 transition hover:border-violet-400 hover:bg-violet-500/10 hover:text-violet-600" aria-label="Adicionar imagens" title="Adicionar imagens" @click="addImagesInput?.click()">＋</button>
+
+          <div class="flex h-10 min-w-[160px] flex-1 items-center gap-2 rounded-full border border-rule bg-paper px-2.5 sm:flex-none sm:px-3" aria-label="Duração e formato">
+            <output class="w-8 shrink-0 text-center text-xs font-semibold text-ink">{{ duration }}s</output>
+            <input id="quick-duration" v-model.number="durationIndex" type="range" min="0" max="5" step="1" class="studio-duration min-w-[54px] flex-1 accent-violet-600 sm:w-24 sm:flex-none" aria-label="Duração" />
+            <select v-model="aspectRatio" class="max-w-[92px] border-0 bg-transparent px-1 text-xs font-semibold text-ink outline-none focus:ring-0 sm:max-w-none" aria-label="Formato">
+              <option v-for="option in aspectOptions" :key="option.value" :value="option.value">{{ option.label }} {{ option.name }}</option>
+            </select>
+          </div>
+
+          <select id="quick-video-model" :value="selectedVideoModel" :disabled="!modelsReady || !videoModels.length" class="h-10 min-w-[150px] flex-1 rounded-full border border-rule bg-paper px-3 text-xs font-medium text-ink outline-none transition focus:border-violet-400 disabled:opacity-60 sm:w-[175px] sm:flex-none" aria-label="Modelo de IA" @change="onModelChange">
             <option v-if="!videoModels.includes('agnes-video-2.5-flash')" value="agnes-video-2.5-flash">Video 2.5 Flash — Grátis · padrão</option>
             <option v-for="model in videoModels" :key="model" :value="model">{{ modelLabel(model) }}</option>
           </select>
-          <p v-if="appState.videoCapabilities[selectedVideoModel]?.price === 'paid'" class="mt-2 text-xs leading-5 text-amber-700">Este modelo é pago: 720P US$ 0,025/s, 960P US$ 0,04/s e 2K US$ 0,055/s. As cinco primeiras imagens de referência não têm custo.</p>
-          <p v-else-if="selectedVideoModel === 'agnes-video-2.5-flash'" class="mt-2 text-xs text-muted">Modelo grátis (por tempo limitado), com resolução padrão 720P.</p>
-        </section>
-      </div>
 
-      <section v-if="generationMode !== 'text'">
-        <div class="mb-3 flex items-center justify-between gap-3">
-          <h2 class="text-sm font-semibold text-ink">{{ generationMode === 'image' ? 'Imagem de referência' : 'Quadros do vídeo' }} <span v-if="generationMode === 'keyframes'" class="font-normal text-muted">(inicial e final)</span></h2>
-          <span v-if="generationMode === 'keyframes'" class="text-right text-xs text-muted">Definem o início e o fim da composição</span>
+          <button type="button" class="studio-generate ml-auto h-10 shrink-0 rounded-full px-4 text-xs font-semibold text-white transition disabled:cursor-wait disabled:opacity-60 sm:px-5 sm:text-sm" :disabled="busy || modelSaving" @click="generate">
+            <span v-if="busy || modelSaving" class="inline-flex items-center gap-2"><span class="studio-spinner" aria-hidden="true"></span>{{ modelSaving ? 'Salvando…' : 'Gerando…' }}</span>
+            <span v-else>🎬 Gerar vídeo</span>
+          </button>
         </div>
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label v-if="generationMode === 'keyframes'" class="mb-2 block text-sm font-medium text-ink">Imagem inicial</label>
-            <div
-              class="studio-upload relative flex min-h-48 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition sm:min-h-56"
-              :class="dragActive === 'start' ? 'border-violet-500 bg-violet-500/10' : 'border-rule hover:border-violet-400'"
-              @click="!startImage && startInput?.click()"
-              @dragover.prevent="dragActive = 'start'"
-              @dragleave.prevent="dragActive = null"
-              @drop.prevent="onDrop($event, 'start')"
-            >
-              <input ref="startInput" class="hidden" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange($event, 'start')" />
-              <template v-if="startImage">
-                <img :src="startPreview" :alt="(generationMode === 'image' ? 'Prévia da imagem de referência ' : 'Prévia da imagem inicial ') + startImage.name" class="absolute inset-0 h-full w-full object-contain" />
-                <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-black/65 px-3 py-3 text-white backdrop-blur-sm">
-                  <span class="min-w-0 truncate text-xs">{{ startImage.name }}</span>
-                  <span class="flex shrink-0 gap-1.5">
-                    <button class="rounded-lg bg-white/15 px-2.5 py-1.5 text-xs hover:bg-white/25" @click.stop="startInput?.click()">Trocar</button>
-                    <button class="rounded-lg bg-white/15 px-2.5 py-1.5 text-xs hover:bg-white/25" @click.stop="removeImage('start')">Remover</button>
-                  </span>
-                </div>
-              </template>
-              <div v-else class="px-4 py-7 text-center">
-                <div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/10 text-2xl text-violet-500">＋</div>
-                <p class="text-sm font-medium text-ink">{{ generationMode === 'image' ? 'Escolha ou arraste sua imagem' : 'Escolha ou arraste a imagem inicial' }}</p>
-                <p class="mt-1.5 text-xs text-muted">PNG, JPG, WebP, GIF ou BMP</p>
-              </div>
-            </div>
-            <p v-if="startError" class="mt-2 text-sm text-red-500" role="alert">{{ startError }}</p>
-          </div>
-
-          <div v-if="generationMode === 'keyframes'">
-            <label class="mb-2 block text-sm font-medium text-ink">Imagem final <span class="font-normal text-muted">(opcional)</span></label>
-            <div
-              class="studio-upload relative flex min-h-48 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition sm:min-h-56"
-              :class="dragActive === 'end' ? 'border-violet-500 bg-violet-500/10' : 'border-rule hover:border-violet-400'"
-              @click="!endImage && endInput?.click()"
-              @dragover.prevent="dragActive = 'end'"
-              @dragleave.prevent="dragActive = null"
-              @drop.prevent="onDrop($event, 'end')"
-            >
-              <input ref="endInput" class="hidden" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" @change="onFileChange($event, 'end')" />
-              <template v-if="endImage">
-                <img :src="endPreview" :alt="'Prévia da imagem final ' + endImage.name" class="absolute inset-0 h-full w-full object-contain" />
-                <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-black/65 px-3 py-3 text-white backdrop-blur-sm">
-                  <span class="min-w-0 truncate text-xs">{{ endImage.name }}</span>
-                  <span class="flex shrink-0 gap-1.5">
-                    <button class="rounded-lg bg-white/15 px-2.5 py-1.5 text-xs hover:bg-white/25" @click.stop="endInput?.click()">Trocar</button>
-                    <button class="rounded-lg bg-white/15 px-2.5 py-1.5 text-xs hover:bg-white/25" @click.stop="removeImage('end')">Remover</button>
-                  </span>
-                </div>
-              </template>
-              <div v-else class="px-4 py-7 text-center">
-                <div class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/10 text-2xl text-violet-500">＋</div>
-                <p class="text-sm font-medium text-ink">Adicione um quadro final</p>
-                <p class="mt-1.5 text-xs text-muted">Opcional · PNG, JPG, WebP, GIF ou BMP</p>
-              </div>
-            </div>
-            <p v-if="endError" class="mt-2 text-sm text-red-500" role="alert">{{ endError }}</p>
-          </div>
-        </div>
-        <p v-if="generationMode === 'keyframes' && hasTwoFrames" class="mt-3 text-center text-xs font-medium text-violet-500">Transição: imagem inicial → imagem final</p>
-      </section>
-
-      <section>
-        <div class="mb-3 flex items-center justify-between gap-3">
-          <label for="quick-prompt" class="text-sm font-semibold text-ink">O que acontece no vídeo?</label>
-          <span class="text-xs text-muted">{{ promptLength.toLocaleString('pt-BR') }} / 5.000</span>
-        </div>
-        <textarea
-          id="quick-prompt"
-          v-model="prompt"
-          maxlength="5000"
-          rows="5"
-          class="studio-prompt w-full resize-y rounded-2xl border border-rule bg-paper px-4 py-4 text-sm leading-6 text-ink outline-none transition placeholder:text-muted/70 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 sm:px-5"
-          placeholder="Descreva a cena, os movimentos do personagem e o comportamento da câmera..."
-          @input="promptError = ''"
-        />
-        <p v-if="promptError" class="mt-2 text-sm text-red-500" role="alert">{{ promptError }}</p>
-      </section>
-
-      <div class="grid gap-7 sm:grid-cols-2 sm:gap-8">
-        <section>
-          <h2 class="mb-3 text-sm font-semibold text-ink">Duração</h2>
-          <div class="grid grid-cols-3 gap-2">
-            <button v-for="seconds in durations" :key="seconds" type="button" class="studio-choice border border-rule text-ink-2" :class="duration === seconds ? 'studio-choice-active' : ''" :aria-pressed="duration === seconds" @click="duration = seconds">
-              {{ seconds }} <span class="text-xs font-normal">seg</span>
-            </button>
-          </div>
-        </section>
-        <section>
-          <h2 class="mb-3 text-sm font-semibold text-ink">Formato</h2>
-          <div class="grid grid-cols-3 gap-2">
-            <button v-for="option in aspectOptions" :key="option.value" type="button" class="studio-choice flex flex-col items-center gap-1.5 border border-rule py-2.5 text-ink-2" :class="aspectRatio === option.value ? 'studio-choice-active' : ''" :aria-pressed="aspectRatio === option.value" @click="aspectRatio = option.value">
-              <span class="text-lg leading-5">{{ option.icon }}</span>
-              <span class="text-xs font-semibold">{{ option.label }}</span>
-              <span class="text-[10px] font-normal opacity-75">{{ option.name }}</span>
-            </button>
-          </div>
-        </section>
-      </div>
-
-      <div class="border-t border-rule/70 pt-6">
-        <button type="button" class="studio-generate w-full rounded-2xl px-5 py-4 text-base font-semibold text-white transition disabled:cursor-wait disabled:opacity-60" :disabled="busy || modelSaving" @click="generate">
-          <span v-if="busy || modelSaving" class="inline-flex items-center justify-center gap-2"><span class="studio-spinner" aria-hidden="true"></span>{{ modelSaving ? 'Salvando modelo...' : ' Enviando seu vídeo...' }}</span>
-          <span v-else>🎬 Gerar vídeo</span>
-        </button>
-        <p class="mt-3 text-center text-xs text-muted">O resultado e o progresso da geração serão abertos em uma nova página.</p>
       </div>
     </div>
 
-    <div class="mt-5 text-center">
-      <button class="text-sm text-muted transition hover:text-violet-500" @click="emit('advanced')">Precisa de mais opções? <span class="font-medium">Acesse o Modo Avançado →</span></button>
-    </div>
+    <Teleport to="body">
+      <div v-if="previewImage" class="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" @click.self="previewImage = null">
+        <div ref="previewModalRef" class="relative w-full max-w-4xl rounded-2xl bg-paper p-3 shadow-2xl sm:p-4" role="dialog" aria-modal="true" :aria-label="`${previewImage.frame}: ${previewImage.name}`">
+          <button type="button" class="absolute right-3 top-3 z-10 rounded-full bg-black/55 px-3 py-1.5 text-sm font-medium text-white hover:bg-black/75" aria-label="Fechar imagem ampliada" @click="previewImage = null">×</button>
+          <img :src="previewImage.src" :alt="`${previewImage.frame}: ${previewImage.name}`" class="mx-auto max-h-[75vh] w-full rounded-xl object-contain" />
+          <p class="mt-3 truncate px-1 text-sm font-medium text-ink" :title="previewImage.name">{{ previewImage.name }}</p>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -355,6 +349,8 @@ async function generate() {
   box-shadow: inset 0 0 0 1px #8b5cf6;
 }
 .studio-mode-tab-active { border-color: #8b5cf6; background: rgba(139, 92, 246, .1); color: #7c3aed; box-shadow: inset 0 0 0 1px #8b5cf6; }
+.quick-composer-dock { pointer-events: none; background: linear-gradient(to top, var(--color-paper) 62%, color-mix(in srgb, var(--color-paper) 90%, transparent) 82%, transparent); }
+.studio-duration { height: 16px; cursor: pointer; }
 .studio-generate { background: linear-gradient(100deg, #7c3aed, #a855f7); box-shadow: 0 10px 24px rgba(124, 58, 237, .25); }
 .studio-generate:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 14px 30px rgba(124, 58, 237, .32); }
 .studio-spinner { width: 17px; height: 17px; border: 2px solid rgba(255,255,255,.45); border-top-color: white; border-radius: 50%; animation: studio-spin .75s linear infinite; }

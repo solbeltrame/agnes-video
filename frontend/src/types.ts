@@ -7,6 +7,8 @@ export interface TaskState {
   task_type?: TaskType
   status?: string
   dir_name?: string
+  created_at?: string
+  updated_at?: string
   current_step?: string
   current_status?: string
   current_progress?: number
@@ -24,6 +26,7 @@ export interface TaskState {
   paragraph_count?: number
   paragraphs?: unknown[]
   creative_name?: string
+  title?: string
   // v6.1：后台是否有活跃 pipeline（服务重启后遗留的 pending/queued 任务为 false）
   active?: boolean
   // GA 埋点：error_collector 内存聚合的上游接口报错（按状态码计数，轮询增量上报）
@@ -45,6 +48,7 @@ export interface TaskListItem {
   task_type?: TaskType
   status?: string
   creative_name?: string
+  title?: string
   idea?: string
   prompt?: string
   manuscript_text?: string
@@ -52,6 +56,8 @@ export interface TaskListItem {
   scene_count?: number
   paragraph_count?: number
   dir_name?: string
+  created_at?: string
+  updated_at?: string
   current_step?: string
   current_status?: string
   current_progress?: number

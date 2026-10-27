@@ -6,9 +6,31 @@ import { useConfirm } from '@/composables/useConfirm'
 import { getStepsForType } from '@/steps'
 import type { TaskListItem } from '@/types'
 
+const props = withDefaults(defineProps<{ scope?: 'all' | 'recent' }>(), { scope: 'all' })
+const emit = defineEmits<{ viewAll: [] }>()
 const { tasks, loading, loadTaskList, viewTask, viewRunningTask, resumeTask, stopTaskById, deleteTaskById, switchMode } = useTasks()
 const { confirmAsync } = useConfirm()
 const retryingTaskId = ref('')
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000
+
+function taskUpdatedAt(task: TaskListItem): number {
+  const fromState = Date.parse(task.updated_at || task.created_at || '')
+  if (Number.isFinite(fromState)) return fromState
+  const match = task.dir_name?.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/)
+  if (!match) return 0
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6])).getTime()
+}
+
+const displayedTasks = computed(() => {
+  if (props.scope !== 'recent') return tasks.value
+  const cutoff = Date.now() - RECENT_WINDOW_MS
+  return tasks.value
+    .filter((task) => {
+      if (['running', 'queued', 'pending'].includes(task.status || '')) return true
+      return ['completed', 'failed'].includes(task.status || '') && taskUpdatedAt(task) >= cutoff
+    })
+    .sort((a, b) => taskUpdatedAt(b) - taskUpdatedAt(a))
+})
 
 async function toggleMode(task: TaskListItem) {
   const target = task.current_mode === 'manual' ? 'auto' : 'manual'
@@ -131,19 +153,22 @@ function onMainBtn(task: TaskListItem) {
 <template>
   <div class="space-y-3">
     <div class="mb-4 flex items-center justify-between gap-3">
-      <p class="text-sm text-muted">{{ tasks.length }} {{ tasks.length === 1 ? 'tarefa' : 'tarefas' }}</p>
-      <button class="rounded-full border border-rule px-3.5 py-2 text-xs font-medium text-ink-2 transition hover:border-violet-400 hover:text-violet-500 disabled:opacity-50" :disabled="loading" @click="loadList">
-        <span :class="loading ? 'inline-block animate-spin' : ''">↻</span> Atualizar
-      </button>
+      <p class="text-sm text-muted">{{ scope === 'recent' ? tf('homeRecentCount', { count: displayedTasks.length }) : `${tasks.length} ${tasks.length === 1 ? 'tarefa' : 'tarefas'}` }}</p>
+      <div class="flex items-center gap-2">
+        <button v-if="scope === 'recent'" class="rounded-full px-3.5 py-2 text-xs font-medium text-violet-600 transition hover:bg-violet-500/10" @click="emit('viewAll')">{{ t('homeViewAllTasks') }} →</button>
+        <button v-else class="rounded-full border border-rule px-3.5 py-2 text-xs font-medium text-ink-2 transition hover:border-violet-400 hover:text-violet-500 disabled:opacity-50" :disabled="loading" @click="loadList">
+          <span :class="loading ? 'inline-block animate-spin' : ''">↻</span> Atualizar
+        </button>
+      </div>
     </div>
-    <div v-if="loading && !tasks.length" class="rounded-2xl border border-rule/70 bg-paper p-8 text-center text-sm text-muted">Carregando seus vídeos…</div>
-    <div v-else-if="!tasks.length" class="rounded-2xl border border-dashed border-rule bg-paper/70 px-5 py-12 text-center">
+    <div v-if="loading && !displayedTasks.length" class="rounded-2xl border border-rule/70 bg-paper p-8 text-center text-sm text-muted">{{ scope === 'recent' ? t('homeRecentLoading') : 'Carregando seus vídeos…' }}</div>
+    <div v-else-if="!displayedTasks.length" class="rounded-2xl border border-dashed border-rule bg-paper/70 px-5 py-12 text-center">
       <span class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-2xl text-violet-500">✦</span>
-      <p class="font-medium text-ink">{{ t('noTasks') }}</p>
-      <p class="mt-1 text-sm text-muted">Seus vídeos gerados aparecerão aqui.</p>
+      <p class="font-medium text-ink">{{ scope === 'recent' ? t('homeRecentEmpty') : t('noTasks') }}</p>
+      <p v-if="scope === 'all'" class="mt-1 text-sm text-muted">Seus vídeos gerados aparecerão aqui.</p>
     </div>
     <div
-      v-for="task in tasks"
+      v-for="task in displayedTasks"
       :key="task.task_id"
       class="studio-task-card flex flex-col gap-4 rounded-2xl border border-rule/70 bg-paper p-4 shadow-sm transition hover:border-violet-300/70 hover:shadow-md sm:p-5 lg:flex-row lg:items-center lg:justify-between"
     >
@@ -163,7 +188,7 @@ function onMainBtn(task: TaskListItem) {
             ✋ {{ t('execManual') }}
           </span>
         </div>
-        <p class="truncate text-base font-semibold text-ink">{{ task.creative_name || task.task_id }}</p>
+        <p class="truncate text-base font-semibold text-ink">{{ task.title || task.creative_name || task.task_id }}</p>
         <p class="mt-1 truncate text-xs text-muted">{{ taskDesc(task) || task.task_id }}{{ taskExtra(task) }}</p>
         <p v-if="taskStatusDetail(task)" class="mt-2 line-clamp-2 text-xs leading-5" :class="task.status === 'failed' ? 'text-red-600' : task.current_message_key === 'progress.video.queue_full' ? 'text-amber-700' : 'text-muted'">
           {{ taskStatusDetail(task) }}

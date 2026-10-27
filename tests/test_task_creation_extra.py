@@ -119,6 +119,16 @@ class TestSimpleRich:
         )
         assert resp.status_code == 200
         assert env["created_states"][-1].creative_name == "Cena 12"
+        assert env["created_states"][-1].title == "Cena 12"
+
+    def test_title_alias_is_saved_and_takes_precedence(self, client, env):
+        resp = client.post(
+            "/api/tasks/simple",
+            data={"prompt": "test", "mode": "t2v", "duration": "8", "title": "Cena 12", "creative_name": "Nome legado"},
+        )
+        assert resp.status_code == 200
+        assert env["created_states"][-1].creative_name == "Cena 12"
+        assert env["created_states"][-1].title == "Cena 12"
 
     def test_legacy_creative_name_is_still_saved(self, client, env):
         resp = client.post(

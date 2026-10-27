@@ -182,6 +182,8 @@ class BaseTaskState(BaseModel):
 
     task_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     creative_name: str = ""
+    # Friendly display title; creative_name remains the legacy task-list field.
+    title: str = ""
     task_type: TaskType
     status: StepStatus = StepStatus.PENDING
     video_width: int = 1280

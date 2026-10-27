@@ -61,6 +61,10 @@ async def list_tasks(limit: int = 0, offset: int = 0, status: str = ""):
         state = task_tm.load()
         if state:
             t["final_video_file"] = state.final_video_file
+            t["creative_name"] = state.creative_name or state.title or t.get("creative_name", "")
+            t["title"] = state.title or state.creative_name or t.get("title", "")
+            t["created_at"] = state.created_at or ""
+            t["updated_at"] = state.updated_at or ""
             t["task_type"] = state.task_type
             t["current_step"] = state.current_step
             t["current_status"] = state.current_status

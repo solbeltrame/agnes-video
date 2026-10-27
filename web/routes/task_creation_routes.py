@@ -299,6 +299,7 @@ async def create_simple_task(
     prompt: str = Form(...),
     creative_name: str = Form(""),
     task_title: str = Form(""),
+    title: str = Form(""),
     mode: str = Form("t2v"),
     duration: int = Form(5),
     video_width: int = Form(768),
@@ -350,12 +351,13 @@ async def create_simple_task(
     elif mode == "keyframes":
         video_mode = VideoMode.KEYFRAMES
 
-    # Modo Rápido envia task_title; creative_name continua aceito para clientes
-    # antigos e para o Modo Avançado. O título deve ser gravado no estado da tarefa.
-    task_name = task_title.strip() or creative_name.strip() or f"simple_{task_id}"
+    # Aceita os aliases do Modo Rápido e o nome legado do Modo Avançado; todos
+    # convergem para creative_name, usado pela persistência e pela listagem.
+    task_name = title.strip() or task_title.strip() or creative_name.strip() or f"simple_{task_id}"
     state = SimpleVideoTask(
         task_id=task_id,
         creative_name=task_name,
+        title=task_name,
         prompt=prompt,
         mode=video_mode,
         duration=duration,

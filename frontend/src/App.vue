@@ -21,6 +21,7 @@ import Toast from '@/components/Toast.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import LangSwitcher from '@/components/shared/LangSwitcher.vue'
 import QuickVideoPanel from '@/components/QuickVideoPanel.vue'
+import ApiKeyModal from '@/components/ApiKeyModal.vue'
 
 const { themeIcon, themeLabel, cycleTheme } = useTheme()
 const { visible: toastVisible, message: toastMessage, type: toastType } = useToast()
@@ -30,10 +31,12 @@ const { loadTaskList, startTaskListTimer, stopTaskListTimer } = useTasks()
 const { parseHash } = useNavigation()
 const { loadGallery, startGalleryTimer, stopGalleryTimer } = useGallery()
 const advancedMode = ref(false)
+const apiKeyModalOpen = ref(false)
 
 function switchMainTab(tab: 'create' | 'list' | 'simple' | 'gallery') {
   appState.view = tab
   if (tab === 'create') advancedMode.value = true
+  else if (tab === 'list') advancedMode.value = false
   location.hash =
     tab === 'list' ? '#/list' : tab === 'simple' ? '#/simple' : tab === 'gallery' ? '#/gallery' : '#/create'
   if (tab === 'list') {
@@ -51,20 +54,17 @@ function switchMainTab(tab: 'create' | 'list' | 'simple' | 'gallery') {
 function returnToQuickMode() {
   advancedMode.value = false
   appState.view = 'create'
+  loadTaskList()
+  startTaskListTimer()
   location.hash = '#/create'
 }
 
 function openQuickHome() {
   advancedMode.value = false
   appState.view = 'create'
-  stopTaskListTimer()
+  loadTaskList()
+  startTaskListTimer()
   stopGalleryTimer()
-  location.hash = '#/create'
-}
-
-function openAdvancedMode() {
-  advancedMode.value = true
-  appState.view = 'create'
   location.hash = '#/create'
 }
 
@@ -83,7 +83,7 @@ onMounted(async () => {
     if (parsed.view === 'gallery') {
       loadGallery()
       startGalleryTimer()
-    } else if (parsed.view === 'list') {
+    } else if (parsed.view === 'list' || parsed.view === 'create') {
       loadTaskList()
       startTaskListTimer()
     }
@@ -123,25 +123,43 @@ onMounted(async () => {
 <template>
   <ProgressPage v-if="appState.view === 'progress'" />
 
-  <main v-else-if="appState.view === 'create' && !advancedMode" class="studio-shell min-h-screen px-4 py-5 sm:py-8">
-    <header class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 pb-8">
+  <main v-else-if="appState.view === 'create' && !advancedMode" class="studio-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden px-3 pt-4 sm:px-5 sm:pt-5">
+    <header class="mx-auto flex w-full max-w-5xl shrink-0 items-center justify-between gap-3 pb-3">
       <div class="flex items-center gap-3">
         <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-xl text-white shadow-lg shadow-violet-600/20">✦</div>
-        <span class="text-lg font-semibold tracking-tight text-ink">Agnes Studio</span>
+        <span class="text-base font-semibold tracking-tight text-ink sm:text-lg">Agnes Studio</span>
       </div>
-      <div class="flex items-center gap-2">
-        <button class="inline-flex items-center rounded-full px-3.5 py-2 text-xs text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500" @click="switchMainTab('list')">Meus vídeos</button>
-        <button class="hidden items-center rounded-full px-3.5 py-2 text-xs text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500 sm:inline-flex" @click="advancedMode = true">Modo Avançado</button>
+      <div class="flex shrink-0 items-center gap-1 sm:gap-2">
+        <button class="hidden items-center rounded-full px-3 py-2 text-xs text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500 sm:inline-flex" @click="switchMainTab('list')">Meus vídeos</button>
+        <button class="inline-flex items-center rounded-full px-2 py-2 text-[11px] text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500 sm:px-3 sm:text-xs" @click="advancedMode = true">Modo Avançado</button>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rule text-ink-2 transition hover:border-violet-400 hover:bg-violet-500/10 hover:text-violet-600"
+          :aria-label="t('quickApiKeyButton')"
+          :title="t('quickApiKeyButton')"
+          @click="apiKeyModalOpen = true"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m19.4 15 .1.1a1.8 1.8 0 1 1-2.55 2.55l-.1-.1a1.8 1.8 0 0 0-3.06 1.27v.28a1.8 1.8 0 1 1-3.6 0v-.15A1.8 1.8 0 0 0 7.1 17.7l-.1.1a1.8 1.8 0 1 1-2.55-2.55l.1-.1A1.8 1.8 0 0 0 3.28 12H3.1a1.8 1.8 0 1 1 0-3.6h.15A1.8 1.8 0 0 0 4.52 5.3l-.1-.1a1.8 1.8 0 1 1 2.55-2.55l.1.1A1.8 1.8 0 0 0 10.13 1.5v-.15a1.8 1.8 0 1 1 3.6 0v.15a1.8 1.8 0 0 0 3.06 1.27l.1-.1a1.8 1.8 0 1 1 2.55 2.55l-.1.1A1.8 1.8 0 0 0 20.62 8h.28a1.8 1.8 0 1 1 0 3.6h-.15A1.8 1.8 0 0 0 19.4 15Z" />
+          </svg>
+        </button>
         <LangSwitcher />
       </div>
     </header>
-    <QuickVideoPanel :models-ready="isConfigLoaded" @advanced="advancedMode = true" />
-    <div class="mx-auto mt-6 max-w-3xl text-center">
-      <button class="text-xs text-muted transition hover:text-ink-2 sm:hidden" @click="advancedMode = true">Modo Avançado</button>
-    </div>
+    <section class="mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-y-auto pb-[290px] sm:pb-[195px]">
+      <div class="mb-5 flex flex-wrap items-end justify-between gap-3 pt-2">
+        <div>
+          <h1 class="text-xl font-semibold tracking-tight text-ink sm:text-2xl">Atividade recente</h1>
+          <p class="mt-1 text-xs text-muted sm:text-sm">Tarefas em andamento e finalizadas nas últimas 24 horas.</p>
+        </div>
+      </div>
+      <TaskListPanel scope="recent" @view-all="switchMainTab('list')" />
+    </section>
+    <QuickVideoPanel :models-ready="isConfigLoaded" />
   </main>
 
-  <main v-else-if="appState.view === 'list'" class="studio-shell min-h-screen px-4 py-5 sm:py-8">
+  <main v-else-if="appState.view === 'list' && !advancedMode" class="studio-shell min-h-screen px-4 py-5 sm:px-6 sm:py-8">
     <header class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 pb-8">
       <button class="flex items-center gap-3 text-left" @click="openQuickHome">
         <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-xl text-white shadow-lg shadow-violet-600/20">✦</span>
@@ -153,15 +171,12 @@ onMounted(async () => {
       </div>
     </header>
     <section class="mx-auto max-w-5xl">
-      <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Agnes Studio</p>
-          <h1 class="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Meus vídeos</h1>
-          <p class="mt-2 text-sm text-muted">Acompanhe o progresso e acesse seus vídeos gerados.</p>
-        </div>
-        <button class="rounded-full border border-rule px-4 py-2 text-xs font-medium text-ink-2 transition hover:border-violet-400 hover:text-violet-500" @click="openAdvancedMode">Modo Avançado</button>
+      <div class="mb-6">
+        <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Agnes Studio</p>
+        <h1 class="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Meus vídeos</h1>
+        <p class="mt-2 text-sm text-muted">Histórico completo das suas tarefas.</p>
       </div>
-      <TaskListPanel />
+      <TaskListPanel scope="all" />
     </section>
   </main>
 
@@ -302,6 +317,7 @@ onMounted(async () => {
   </div>
 
   <!-- Voice Picker Modal -->
+  <ApiKeyModal v-model:open="apiKeyModalOpen" />
   <VoicePickerModal />
 
   <!-- Toast / Confirm -->

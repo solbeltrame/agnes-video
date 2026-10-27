@@ -44,6 +44,29 @@ def test_list_all_with_total(client):
     assert len(data["tasks"]) == 5
 
 
+def test_list_includes_task_timestamps_for_recent_activity(client):
+    app_client, wd = client
+    _make_task(wd, "recent", "completed")
+    state_path = os.path.join(wd, "d_recent", "task_state.json")
+    with open(state_path, "r+", encoding="utf-8") as f:
+        state = json.load(f)
+        state["created_at"] = "2026-10-27T10:00:00"
+        state["updated_at"] = "2026-10-27T10:30:00"
+        state["title"] = "Cena 12"
+        state["creative_name"] = "Cena 12"
+        f.seek(0)
+        json.dump(state, f)
+        f.truncate()
+
+    r = app_client.get("/api/tasks")
+    assert r.status_code == 200
+    task = r.json()["tasks"][0]
+    assert task["created_at"] == "2026-10-27T10:00:00"
+    assert task["updated_at"] == "2026-10-27T10:30:00"
+    assert task["title"] == "Cena 12"
+    assert task["creative_name"] == "Cena 12"
+
+
 def test_status_filter(client):
     app_client, wd = client
     for i in range(3):

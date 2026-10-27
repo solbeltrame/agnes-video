@@ -211,6 +211,7 @@ class TaskManager:
                         "dir_name": name,
                         "task_type": data.get("task_type", TaskType.CREATIVE),
                         "creative_name": data.get("creative_name", ""),
+                        "title": data.get("title") or data.get("creative_name", ""),
                         "status": data.get("status", "pending"),
                         "chaining_mode": data.get("chaining_mode", "none"),
                     })
