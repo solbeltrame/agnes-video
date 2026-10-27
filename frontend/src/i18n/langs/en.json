@@ -1,4 +1,5 @@
 {
+  "progressSimpleStart": "Starting video generation...",
   "subtitle": "AI Video, One Click",
   "apiKeyTitle": "API Key Configuration",
   "quickApiKeyButton": "Configure API Key",

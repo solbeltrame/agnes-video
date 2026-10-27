@@ -4,20 +4,15 @@ import { appState } from '@/store'
 // hash 规则：'#/progress/<taskId>' | '#/list' | '#/gallery' | '#/create'
 
 export function useNavigation() {
-  // 打开任务详情页：始终在新标签页打开，原页面（主页）保持不变
+  // 所有任务详情统一交给根组件在当前页面以模态框打开。
   function goProgress(taskId: string, origin: 'create' | 'list' | 'gallery' = 'create') {
-    // 来源标记不跨标签页传递（新标签页内默认回主页），仅在当前页记录
     appState.progressOrigin = origin
-    const url = location.pathname + location.search + '#/progress/' + encodeURIComponent(taskId)
-    window.open(url, '_blank', 'noopener')
+    window.dispatchEvent(new CustomEvent('agnes:open-task-progress', { detail: { taskId, origin } }))
   }
 
-  // 同页打开任务详情（自动恢复场景用，避免自动重连时无限开新标签页）
+  // 兼容旧调用名；任务详情始终以模态框打开。
   function goProgressInPage(taskId: string) {
-    appState.view = 'progress'
-    appState.progressTaskId = taskId
-    appState.currentTaskId = taskId
-    location.hash = '#/progress/' + encodeURIComponent(taskId)
+    goProgress(taskId, appState.progressOrigin)
   }
 
   // 显式跳转主页（去掉 hash 回到根视图）

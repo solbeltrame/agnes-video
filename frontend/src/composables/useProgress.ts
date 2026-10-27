@@ -8,6 +8,7 @@ import { useArtifacts } from './useArtifacts'
 import { useToast } from './useToast'
 import { getRetryCount, bumpRetryCount, clearRetryCount } from '@/utils/feedback'
 import { queueFullWindowHint } from '@/utils/retryWindows'
+import { normalizeProgressMessage } from '@/utils/progressMessages'
 import type { TaskState, StepDef } from '@/types'
 
 const POLL_INTERVAL = 30000
@@ -124,7 +125,7 @@ function renderBackendMessage(state: TaskState): string {
     // tf 未命中会原样返回 key —— 此时必须回退，不能把 key 显示给用户
     if (rendered !== key) return rendered
   }
-  return state.current_message || ''
+  return normalizeProgressMessage(state.current_message || '')
 }
 
 /**
@@ -196,7 +197,7 @@ async function mountProgressPage(taskId: string, dirName?: string | null) {
     // 立即用后端实时进度消息（排队中/当前步骤），避免首次展示「任务启动中 + 0%」占位
     if (state.current_message) {
       setProgressMessageHtml(
-        `<span class="text-accent animate-pulse">${escapeHtml(state.current_message)}</span>`,
+        `<span class="text-accent animate-pulse">${escapeHtml(renderBackendMessage(state))}</span>`,
       )
     }
     startPolling(taskId)

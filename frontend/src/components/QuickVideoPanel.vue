@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { appState } from '@/store'
 import { useTaskSubmit } from '@/composables/useTaskSubmit'
+import { useTasks } from '@/composables/useTasks'
 import { useConfig } from '@/composables/useConfig'
 import { useModalA11y } from '@/composables/useModalA11y'
 import { t } from '@/i18n'
@@ -9,6 +10,7 @@ import RefreshIcon from '@/components/shared/RefreshIcon.vue'
 
 const props = defineProps<{ modelsReady: boolean }>()
 const submitter = useTaskSubmit()
+const { loadTaskList } = useTasks()
 const { saveModels } = useConfig()
 
 const durations = [4, 5, 6, 8, 10, 12]
@@ -297,6 +299,11 @@ async function generate() {
       return form
     },
     extraEvent: { mode: generationMode.value === 'keyframes' ? 'keyframe' : generationMode.value === 'image' ? 'reference' : 'text', duration: String(duration.value), resolution: aspectRatio.value + '/720P', video_model: model },
+    onSubmit: (task) => {
+      appState.currentTaskType = 'simple'
+      appState.currentDirName = task.dir_name || task.task_id
+      void loadTaskList(true)
+    },
     onSuccess: () => clearForm(),
   })
 }
@@ -351,7 +358,7 @@ async function generate() {
               v-model="prompt"
               maxlength="5000"
               rows="2"
-              class="studio-prompt block max-h-36 min-h-[58px] w-full resize-none overflow-y-auto rounded-xl border-0 bg-transparent px-1 py-2 pr-16 pb-6 text-sm leading-6 text-ink outline-none placeholder:text-muted/75 focus:ring-0 sm:text-base"
+              class="studio-prompt block max-h-36 min-h-[58px] w-full resize-none overflow-y-auto rounded-xl border-0 bg-transparent px-1 py-2 pr-16 pb-6 text-sm leading-6 text-ink outline-none placeholder:text-muted/75 focus:ring-0"
               placeholder="Descreva a cena, os movimentos do personagem e o comportamento da câmera..."
               aria-label="Prompt do vídeo"
               @input="promptError = ''"
@@ -421,6 +428,7 @@ async function generate() {
 .studio-shell {
   background: radial-gradient(ellipse at 50% -15%, rgba(139, 92, 246, .12), transparent 55%);
 }
+.studio-prompt:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; border-radius: 8px; }
 .studio-card { box-shadow: 0 24px 70px rgba(30, 20, 60, .08); }
 .studio-choice {
   min-height: 46px;

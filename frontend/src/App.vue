@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref, onMounted } from 'vue'
+import { nextTick, ref, onMounted, onUnmounted } from 'vue'
 import { t } from '@/i18n'
 import { useTheme } from '@/composables/useTheme'
 import { useToast } from '@/composables/useToast'
@@ -24,10 +24,11 @@ import QuickVideoPanel from '@/components/QuickVideoPanel.vue'
 import ApiKeyModal from '@/components/ApiKeyModal.vue'
 import SettingsIcon from '@/components/shared/SettingsIcon.vue'
 import { useModalA11y } from '@/composables/useModalA11y'
+import * as api from '@/api'
 import type { TaskListItem } from '@/types'
 
 const { themeIcon, themeLabel, cycleTheme } = useTheme()
-const { visible: toastVisible, message: toastMessage, type: toastType } = useToast()
+const { visible: toastVisible, message: toastMessage, type: toastType, showToast } = useToast()
 const { loadModels, renderWorkspaces } = useConfig()
 const { initVoiceSelector } = useVoice()
 const { loadTaskList, startTaskListTimer, stopTaskListTimer } = useTasks()
@@ -47,12 +48,32 @@ function openCompletedVideos() {
 
 function openTaskDetails(task: TaskListItem) {
   completedVideosOpen.value = false
-  appState.progressTaskId = task.task_id
-  appState.currentTaskId = task.task_id
-  appState.currentDirName = task.dir_name || task.task_id
+  setTaskDetails(task.task_id, task)
+}
+
+function setTaskDetails(taskId: string, task: Partial<TaskListItem> = {}) {
+  appState.progressTaskId = taskId
+  appState.currentTaskId = taskId
+  appState.currentDirName = task.dir_name || taskId
   appState.currentTaskType = task.task_type || 'creative'
-  appState.currentArtifactsTaskId = task.task_id
+  appState.currentArtifactsTaskId = taskId
   taskDetailsOpen.value = true
+}
+
+async function openTaskProgressModal(taskId: string) {
+  try {
+    const task = await api.getTask(taskId)
+    setTaskDetails(taskId, task)
+  } catch (error: any) {
+    showToast(t('failLoad') + ': ' + (error?.message || ''), 4500)
+  }
+}
+
+function handleOpenTaskProgress(event: Event) {
+  const detail = (event as CustomEvent<{ taskId?: string; origin?: 'create' | 'list' | 'gallery' }>).detail
+  if (!detail?.taskId) return
+  appState.progressOrigin = detail.origin || 'create'
+  void openTaskProgressModal(detail.taskId)
 }
 
 async function closeTaskDetails() {
@@ -62,6 +83,7 @@ async function closeTaskDetails() {
   appState.currentTaskId = null
   appState.currentDirName = null
   appState.currentArtifactsTaskId = null
+  if (location.hash.startsWith('#/progress/')) location.hash = '#/create'
 }
 
 function switchMainTab(tab: 'create' | 'list' | 'simple' | 'gallery') {
@@ -102,13 +124,14 @@ function openQuickHome() {
 const isConfigLoaded = ref(false)
 
 onMounted(async () => {
+  window.addEventListener('agnes:open-task-progress', handleOpenTaskProgress)
   // 解析 hash：直达进度页 / 列表页（刷新保留视图）
   const parsed = parseHash()
   if (parsed.view === 'progress' && parsed.taskId) {
-    appState.view = 'progress'
-    appState.progressTaskId = parsed.taskId
-    appState.currentTaskId = parsed.taskId
-    // 其余恢复逻辑由 ProgressPage 挂载时统一处理
+    appState.view = 'create'
+    openTaskProgressModal(parsed.taskId)
+    loadTaskList()
+    startTaskListTimer()
   } else {
     appState.view = parsed.view
     if (parsed.view === 'gallery') {
@@ -149,13 +172,18 @@ onMounted(async () => {
   }
 
 })
+
+onUnmounted(() => {
+  window.removeEventListener('agnes:open-task-progress', handleOpenTaskProgress)
+})
 </script>
 
 <template>
   <ProgressPage v-if="appState.view === 'progress'" />
 
-  <main v-else-if="appState.view === 'create' && !advancedMode" class="studio-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden px-3 pt-4 sm:px-5 sm:pt-5">
-    <header class="mx-auto flex w-full max-w-5xl shrink-0 items-center justify-between gap-3 pb-3">
+  <main v-else-if="appState.view === 'create' && !advancedMode" class="studio-shell min-h-[100dvh] px-3 pb-[320px] sm:px-5 sm:pb-[300px]">
+    <div class="sticky top-0 z-30 -mx-3 bg-paper/95 px-3 pt-4 backdrop-blur-xl sm:-mx-5 sm:px-5 sm:pt-5">
+    <header class="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 pb-3">
       <div class="flex items-center gap-3">
         <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-xl text-white shadow-lg shadow-violet-600/20">✦</div>
         <span class="text-base font-semibold tracking-tight text-ink sm:text-lg">Agnes Studio</span>
@@ -175,20 +203,17 @@ onMounted(async () => {
         <LangSwitcher />
       </div>
     </header>
-    <section class="mx-auto min-h-0 w-full max-w-5xl flex-1 overflow-y-auto pb-[290px] sm:pb-[195px]">
+    </div>
+    <section class="mx-auto w-full max-w-5xl">
       <div v-show="recentTasksEmpty" class="mx-auto max-w-3xl pt-12 text-center sm:pt-20">
         <p class="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-violet-500">Criação de vídeo com IA</p>
         <h1 class="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">Sua ideia em movimento</h1>
         <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted sm:text-base">Descreva o que você imagina e deixe a Agnes criar o vídeo.</p>
       </div>
       <div v-show="!recentTasksEmpty">
-        <div class="mb-5 flex flex-wrap items-end justify-between gap-3 pt-2">
-          <div>
-            <h1 class="text-xl font-semibold tracking-tight text-ink sm:text-2xl">Atividade recente</h1>
-            <p class="mt-1 text-xs text-muted sm:text-sm">Tarefas em andamento e finalizadas nas últimas 24 horas.</p>
-          </div>
+        <div class="pt-5 sm:pt-7">
+          <TaskListPanel scope="recent" @view-completed="openCompletedVideos" @open-task="openTaskDetails" @empty-change="recentTasksEmpty = $event" />
         </div>
-        <TaskListPanel scope="recent" @view-completed="openCompletedVideos" @open-task="openTaskDetails" @empty-change="recentTasksEmpty = $event" />
       </div>
     </section>
     <QuickVideoPanel :models-ready="isConfigLoaded" />

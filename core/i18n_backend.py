@@ -406,8 +406,9 @@ CATALOG: Dict[str, Dict[str, str]] = {
 
     # ── P1 流水线进度消息（core/pipelines/* + core/screenwriter，v7.0 backend i18n 收尾批次）──
     "progress.simple.start": {
-        "zh": "开始简单视频生成...",
+        "zh": "Starting video generation...",
         "en": "Starting simple video generation...",
+        "pt": "Iniciando a geração de vídeo...",
     },
     "progress.simple.done": {
         "zh": "视频生成完成!",

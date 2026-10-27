@@ -6,10 +6,12 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useModalA11y } from '@/composables/useModalA11y'
 import RefreshIcon from '@/components/shared/RefreshIcon.vue'
 import { getStepsForType } from '@/steps'
+import { normalizeProgressMessage } from '@/utils/progressMessages'
 import type { TaskListItem } from '@/types'
 
 const props = withDefaults(defineProps<{ scope?: 'all' | 'recent' | 'completed' }>(), { scope: 'all' })
 const emit = defineEmits<{ 'view-completed': []; 'open-task': [task: TaskListItem]; 'empty-change': [empty: boolean] }>()
+const isRecentScope = computed(() => props.scope === 'recent')
 const { tasks, loading, loadTaskList, resumeTask, stopTaskById, deleteTaskById, switchMode } = useTasks()
 const { confirmAsync } = useConfirm()
 const retryingTaskId = ref('')
@@ -126,9 +128,9 @@ function taskStatusDetail(task: TaskListItem): string {
   if (key === 'task.queued') return t('statusQueued')
   if (key) {
     const translated = tf(key, task.current_message_params || {})
-    if (translated !== key) return translated
+    if (translated !== key) return normalizeProgressMessage(translated)
   }
-  if (task.current_message && (task.status === 'failed' || !task.current_step)) return task.current_message
+  if (task.current_message && (task.status === 'failed' || !task.current_step)) return normalizeProgressMessage(task.current_message)
   if ((task.status === 'pending' || task.status === 'queued') && task.active === false) return t('taskNotRunningHint')
   if (task.current_step) {
     const stepKey = task.current_step.replace(/^step_/, '')
@@ -138,7 +140,7 @@ function taskStatusDetail(task: TaskListItem): string {
       return `${t(step.labelKey)}${pct > 0 && pct < 1 ? ` · ${Math.round(pct * 100)}%` : ''}`
     }
   }
-  return task.current_message || ''
+  return normalizeProgressMessage(task.current_message || '')
 }
 
 async function retryTask(task: TaskListItem) {
@@ -179,7 +181,7 @@ function openTask(task: TaskListItem) {
 
 <template>
   <div class="space-y-3">
-    <div class="mb-4 flex items-center justify-between gap-3">
+    <div v-if="!isRecentScope" class="mb-4 flex items-center justify-between gap-3">
       <p class="text-sm text-muted">{{ scope === 'recent' ? tf('homeRecentCount', { count: displayedTasks.length }) : `${displayedTasks.length} ${displayedTasks.length === 1 ? 'tarefa' : 'tarefas'}` }}</p>
       <div class="flex items-center gap-2">
         <button v-if="scope === 'recent'" class="rounded-full px-3.5 py-2 text-xs font-medium text-violet-600 transition hover:bg-violet-500/10" @click="emit('view-completed')">{{ t('homeCompletedVideos') }} →</button>
@@ -188,16 +190,16 @@ function openTask(task: TaskListItem) {
         </button>
       </div>
     </div>
-    <div v-if="loading && !displayedTasks.length" class="rounded-2xl border border-rule/70 bg-paper p-8 text-center text-sm text-muted">{{ scope === 'recent' ? t('homeRecentLoading') : 'Carregando seus vídeos…' }}</div>
+    <div v-if="loading && !displayedTasks.length" class="rounded-2xl border border-rule/70 bg-paper p-8 text-center text-sm text-muted">{{ isRecentScope ? t('homeRecentLoading') : 'Carregando seus vídeos…' }}</div>
     <div v-else-if="!displayedTasks.length" class="rounded-2xl border border-dashed border-rule bg-paper/70 px-5 py-12 text-center">
       <span class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-500/10 text-2xl text-violet-500">✦</span>
-      <p class="font-medium text-ink">{{ scope === 'recent' ? t('homeRecentEmpty') : t('noTasks') }}</p>
+      <p class="font-medium text-ink">{{ isRecentScope ? t('homeRecentEmpty') : t('noTasks') }}</p>
       <p v-if="scope === 'all'" class="mt-1 text-sm text-muted">Seus vídeos gerados aparecerão aqui.</p>
     </div>
     <div
       v-for="task in displayedTasks"
       :key="task.task_id"
-      class="studio-task-card flex cursor-pointer flex-col gap-4 rounded-2xl border border-rule/70 bg-paper p-4 shadow-sm transition hover:border-violet-300/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 sm:p-5 lg:flex-row lg:items-center lg:justify-between"
+      class="studio-task-card flex cursor-pointer flex-col gap-4 rounded-2xl border border-rule/70 bg-paper p-4 shadow-sm transition hover:border-violet-300/70 hover:shadow-md focus-visible:outline-none sm:p-5 lg:flex-row lg:items-center lg:justify-between"
       tabindex="0"
       @click="openTask(task)"
       @keydown.enter.self="openTask(task)"
@@ -237,7 +239,7 @@ function openTask(task: TaskListItem) {
             </div>
           </div>
           <p class="mt-1 truncate text-xs text-muted">{{ taskDesc(task) || task.task_id }}{{ taskExtra(task) }}</p>
-          <p v-if="taskStatusDetail(task)" class="mt-2 line-clamp-2 text-xs leading-5" :class="task.status === 'failed' ? 'text-red-600' : task.current_message_key === 'progress.video.queue_full' ? 'text-amber-700' : 'text-muted'">
+          <p v-if="taskStatusDetail(task)" class="mt-2 line-clamp-2 text-xs leading-5" :class="isRecentScope ? 'text-white' : task.status === 'failed' ? 'text-red-600' : task.current_message_key === 'progress.video.queue_full' ? 'text-amber-700' : 'text-muted'">
             {{ taskStatusDetail(task) }}
           </p>
           <p class="mt-1 truncate font-mono text-[10px] text-muted/70">{{ task.task_id }}</p>
