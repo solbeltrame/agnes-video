@@ -148,7 +148,11 @@ async function generate() {
     taskType: 'simple',
     buildForm: () => {
       const form = new FormData()
-      form.append('creative_name', taskTitle.value.trim())
+      const title = taskTitle.value.trim()
+      // task_title é o campo explícito do Modo Rápido. creative_name permanece
+      // para compatibilidade com versões anteriores da API e outras telas.
+      form.append('task_title', title)
+      form.append('creative_name', title)
       form.append('prompt', prompt.value.trim())
       form.append('mode', generationMode.value === 'keyframes' ? 'keyframes' : generationMode.value === 'image' ? 'i2v' : 't2v')
       // Os seis valores correspondem aos aceitos pela rota e enviados como seconds

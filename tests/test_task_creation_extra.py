@@ -112,6 +112,22 @@ class TestSimpleRich:
         )
         assert resp.status_code == 200
 
+    def test_task_title_is_saved(self, client, env):
+        resp = client.post(
+            "/api/tasks/simple",
+            data={"prompt": "test", "mode": "t2v", "duration": "8", "task_title": "Cena 12"},
+        )
+        assert resp.status_code == 200
+        assert env["created_states"][-1].creative_name == "Cena 12"
+
+    def test_legacy_creative_name_is_still_saved(self, client, env):
+        resp = client.post(
+            "/api/tasks/simple",
+            data={"prompt": "test", "mode": "t2v", "duration": "8", "creative_name": "Título legado"},
+        )
+        assert resp.status_code == 200
+        assert env["created_states"][-1].creative_name == "Título legado"
+
     def test_ti2vid_mode(self, client, env):
         resp = client.post("/api/tasks/simple", data={"prompt": "k", "mode": "ti2vid", "duration": "5"})
         assert resp.status_code == 200
