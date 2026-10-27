@@ -7,7 +7,8 @@ import { useTasks } from '@/composables/useTasks'
 import { useNavigation } from '@/composables/useNavigation'
 import LangSwitcher from '@/components/shared/LangSwitcher.vue'
 
-const props = defineProps<{ taskTitle?: string }>()
+const props = withDefaults(defineProps<{ taskTitle?: string; embedded?: boolean }>(), { embedded: false })
+const emit = defineEmits<{ close: [] }>()
 const { progressPct, awaitingCheckpoint, taskFailed, needsResume } = useProgress()
 const { stopTaskById, switchMode } = useTasks()
 const { goBack, goHome } = useNavigation()
@@ -36,7 +37,8 @@ const statusInfo = computed(() => {
 })
 
 function onBack() {
-  goBack()
+  if (props.embedded) emit('close')
+  else goBack()
 }
 
 function onHome() {
@@ -55,10 +57,11 @@ async function onSwitchAuto() {
 <template>
   <header class="sticky top-0 z-40 border-b border-rule/50 bg-paper/85 backdrop-blur-xl">
     <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-3">
-      <button class="flex shrink-0 items-center gap-2.5 text-left" :title="t('goHome')" @click="onHome">
+      <button v-if="!props.embedded" class="flex shrink-0 items-center gap-2.5 text-left" :title="t('goHome')" @click="onHome">
         <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-lg text-white shadow-md shadow-violet-600/20">✦</span>
         <span class="hidden text-sm font-semibold tracking-tight text-ink sm:inline">Agnes Studio</span>
       </button>
+      <span v-else class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-lg text-white shadow-md shadow-violet-600/20">✦</span>
 
       <span class="h-7 w-px bg-rule/70"></span>
       <div class="min-w-0 flex-1">
@@ -72,7 +75,7 @@ async function onSwitchAuto() {
       </div>
 
       <div class="ml-auto flex shrink-0 items-center gap-2">
-        <LangSwitcher compact />
+        <LangSwitcher v-if="!props.embedded" compact />
         <span class="rounded-full border px-2.5 py-1 text-[11px] font-semibold" :class="statusInfo.cls">
           {{ t(statusInfo.key) }}
         </span>
@@ -91,7 +94,8 @@ async function onSwitchAuto() {
           {{ t('stopTask') }}
         </button>
       </div>
-      <button class="order-last w-full text-left text-xs text-muted transition hover:text-violet-500 sm:order-none sm:ml-auto sm:w-auto" @click="onBack">← {{ t('progressBack') }}</button>
+      <button v-if="props.embedded" class="order-last flex h-9 w-9 items-center justify-center rounded-full border border-rule text-xl text-muted transition hover:bg-paper-3 hover:text-ink sm:order-none sm:ml-auto" :aria-label="t('progressBack')" @click="onBack">×</button>
+      <button v-else class="order-last w-full text-left text-xs text-muted transition hover:text-violet-500 sm:order-none sm:ml-auto sm:w-auto" @click="onBack">← {{ t('progressBack') }}</button>
     </div>
   </header>
 </template>

@@ -13,6 +13,7 @@
   "quickApiKeyClose": "Fechar configuração da API Key",
   "homeRecentCount": "{count} tarefas recentes",
   "homeViewAllTasks": "Ver lista completa",
+  "homeCompletedVideos": "Ver concluídos",
   "homeRecentLoading": "Carregando atividade recente…",
   "homeRecentEmpty": "Nenhuma tarefa recente. Seus vídeos em andamento ou recém-finalizados aparecerão aqui.",
   "quickClearForm": "Limpar formulário",

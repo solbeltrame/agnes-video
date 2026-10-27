@@ -8,9 +8,9 @@ import RefreshIcon from '@/components/shared/RefreshIcon.vue'
 import { getStepsForType } from '@/steps'
 import type { TaskListItem } from '@/types'
 
-const props = withDefaults(defineProps<{ scope?: 'all' | 'recent' }>(), { scope: 'all' })
-const emit = defineEmits<{ viewAll: []; 'empty-change': [empty: boolean] }>()
-const { tasks, loading, loadTaskList, viewTask, viewRunningTask, resumeTask, stopTaskById, deleteTaskById, switchMode } = useTasks()
+const props = withDefaults(defineProps<{ scope?: 'all' | 'recent' | 'completed' }>(), { scope: 'all' })
+const emit = defineEmits<{ 'view-completed': []; 'open-task': [task: TaskListItem]; 'empty-change': [empty: boolean] }>()
+const { tasks, loading, loadTaskList, resumeTask, stopTaskById, deleteTaskById, switchMode } = useTasks()
 const { confirmAsync } = useConfirm()
 const retryingTaskId = ref('')
 const inputImagePreview = ref<{ src: string; label: string } | null>(null)
@@ -27,6 +27,7 @@ function taskUpdatedAt(task: TaskListItem): number {
 }
 
 const displayedTasks = computed(() => {
+  if (props.scope === 'completed') return tasks.value.filter((task) => task.status === 'completed')
   if (props.scope !== 'recent') return tasks.value
   const cutoff = Date.now() - RECENT_WINDOW_MS
   return tasks.value
@@ -167,18 +168,21 @@ function openInputImage(task: TaskListItem, frame: 'start' | 'end') {
 }
 
 function onMainBtn(task: TaskListItem) {
-  if (isCompleted(task)) viewTask(task.task_id)
-  else if (isRunning(task)) viewRunningTask(task.task_id)
+  if (isCompleted(task) || isRunning(task)) emit('open-task', task)
   else resumeTask(task.task_id)
+}
+
+function openTask(task: TaskListItem) {
+  emit('open-task', task)
 }
 </script>
 
 <template>
   <div class="space-y-3">
     <div class="mb-4 flex items-center justify-between gap-3">
-      <p class="text-sm text-muted">{{ scope === 'recent' ? tf('homeRecentCount', { count: displayedTasks.length }) : `${tasks.length} ${tasks.length === 1 ? 'tarefa' : 'tarefas'}` }}</p>
+      <p class="text-sm text-muted">{{ scope === 'recent' ? tf('homeRecentCount', { count: displayedTasks.length }) : `${displayedTasks.length} ${displayedTasks.length === 1 ? 'tarefa' : 'tarefas'}` }}</p>
       <div class="flex items-center gap-2">
-        <button v-if="scope === 'recent'" class="rounded-full px-3.5 py-2 text-xs font-medium text-violet-600 transition hover:bg-violet-500/10" @click="emit('viewAll')">{{ t('homeViewAllTasks') }} →</button>
+        <button v-if="scope === 'recent'" class="rounded-full px-3.5 py-2 text-xs font-medium text-violet-600 transition hover:bg-violet-500/10" @click="emit('view-completed')">{{ t('homeCompletedVideos') }} →</button>
         <button v-else class="inline-flex h-9 items-center gap-2 rounded-full border border-rule px-3.5 text-xs font-medium text-ink-2 transition hover:border-violet-400 hover:text-violet-500 disabled:cursor-wait disabled:opacity-50" :disabled="loading" @click="loadList">
           <RefreshIcon :class="{ 'animate-spin': loading }" /> Atualizar
         </button>
@@ -193,19 +197,23 @@ function onMainBtn(task: TaskListItem) {
     <div
       v-for="task in displayedTasks"
       :key="task.task_id"
-      class="studio-task-card flex flex-col gap-4 rounded-2xl border border-rule/70 bg-paper p-4 shadow-sm transition hover:border-violet-300/70 hover:shadow-md sm:p-5 lg:flex-row lg:items-center lg:justify-between"
+      class="studio-task-card flex cursor-pointer flex-col gap-4 rounded-2xl border border-rule/70 bg-paper p-4 shadow-sm transition hover:border-violet-300/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 sm:p-5 lg:flex-row lg:items-center lg:justify-between"
+      tabindex="0"
+      @click="openTask(task)"
+      @keydown.enter.self="openTask(task)"
+      @keydown.space.self.prevent="openTask(task)"
     >
       <div class="flex min-w-0 flex-1 items-start gap-3">
         <div v-if="task.reference_image_url || task.end_frame_image_url" class="w-[68px] shrink-0 pt-1">
           <div v-if="task.reference_image_url && task.end_frame_image_url" class="relative h-[70px] w-[68px]">
-            <button type="button" class="absolute left-0 top-2 z-0 h-14 w-10 -rotate-[9deg] overflow-hidden rounded-lg border-2 border-paper bg-paper-3 shadow-md transition duration-200 hover:z-20 hover:scale-125 hover:rotate-0 hover:shadow-xl" aria-label="Ampliar imagem inicial" @click="openInputImage(task, 'start')">
+            <button type="button" class="absolute left-0 top-2 z-0 h-14 w-10 -rotate-[9deg] overflow-hidden rounded-lg border-2 border-paper bg-paper-3 shadow-md transition duration-200 hover:z-20 hover:scale-125 hover:rotate-0 hover:shadow-xl" aria-label="Ampliar imagem inicial" @click.stop="openInputImage(task, 'start')">
               <img :src="task.reference_image_url" alt="Imagem inicial" class="h-full w-full object-cover" loading="lazy" />
             </button>
-            <button type="button" class="absolute right-0 top-2 z-10 h-14 w-10 rotate-[9deg] overflow-hidden rounded-lg border-2 border-paper bg-paper-3 shadow-md transition duration-200 hover:z-20 hover:scale-125 hover:rotate-0 hover:shadow-xl" aria-label="Ampliar imagem final" @click="openInputImage(task, 'end')">
+            <button type="button" class="absolute right-0 top-2 z-10 h-14 w-10 rotate-[9deg] overflow-hidden rounded-lg border-2 border-paper bg-paper-3 shadow-md transition duration-200 hover:z-20 hover:scale-125 hover:rotate-0 hover:shadow-xl" aria-label="Ampliar imagem final" @click.stop="openInputImage(task, 'end')">
               <img :src="task.end_frame_image_url" alt="Imagem final" class="h-full w-full object-cover" loading="lazy" />
             </button>
           </div>
-          <button v-else type="button" class="h-[70px] w-[60px] overflow-hidden rounded-xl border border-rule bg-paper-3 shadow-sm transition duration-200 hover:scale-110 hover:shadow-lg" :aria-label="task.reference_image_url ? 'Ampliar imagem de referência' : 'Ampliar imagem final'" @click="openInputImage(task, task.reference_image_url ? 'start' : 'end')">
+          <button v-else type="button" class="h-[70px] w-[60px] overflow-hidden rounded-xl border border-rule bg-paper-3 shadow-sm transition duration-200 hover:scale-110 hover:shadow-lg" :aria-label="task.reference_image_url ? 'Ampliar imagem de referência' : 'Ampliar imagem final'" @click.stop="openInputImage(task, task.reference_image_url ? 'start' : 'end')">
             <img :src="task.reference_image_url || task.end_frame_image_url" :alt="task.reference_image_url ? 'Imagem de referência' : 'Imagem final'" class="h-full w-full object-cover" loading="lazy" />
           </button>
         </div>
@@ -241,14 +249,14 @@ function onMainBtn(task: TaskListItem) {
           v-if="task.current_mode && !isCompleted(task) && task.status !== 'failed' && task.task_type !== 'simple' && task.task_type !== 'image'"
           class="text-xs px-2.5 py-1.5 rounded-lg transition border border-rule text-ink-2 hover:border-accent/40"
           :title="t(task.current_mode === 'manual' ? 'switchToAuto' : 'switchToManual')"
-          @click="toggleMode(task)"
+          @click.stop="toggleMode(task)"
         >
           {{ task.current_mode === 'manual' ? t('switchToAuto') : t('switchToManual') }}
         </button>
         <button
           v-if="!isCompleted(task) && !isRunning(task)"
           class="text-xs px-3 py-1.5 bg-paper-3 hover:bg-paper-3 rounded-lg transition"
-          @click="viewTask(task.task_id)"
+          @click.stop="openTask(task)"
         >
           {{ t('btnView') }}
         </button>
@@ -256,25 +264,25 @@ function onMainBtn(task: TaskListItem) {
           v-if="task.status === 'failed'"
           class="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-60"
           :disabled="!!retryingTaskId"
-          @click="retryTask(task)"
+          @click.stop="retryTask(task)"
         >
           <RefreshIcon :class="{ 'animate-spin': retryingTaskId === task.task_id }" />
           {{ retryingTaskId === task.task_id ? t('resuming') : t('fbRetryBtn') }}
         </button>
-        <button v-else class="text-xs px-3 py-1.5 bg-accent text-accent-ink hover:bg-accent/90 rounded-lg transition" @click="onMainBtn(task)">
+        <button v-else class="text-xs px-3 py-1.5 bg-accent text-accent-ink hover:bg-accent/90 rounded-lg transition" @click.stop="onMainBtn(task)">
           {{ mainBtnLabel(task) }}
         </button>
         <button
           v-if="isRunning(task)"
           class="text-xs px-3 py-1.5 bg-red-700 hover:bg-red-600 text-red-100 rounded-lg transition"
-          @click="stopTaskById(task.task_id)"
+          @click.stop="stopTaskById(task.task_id)"
         >
           {{ t('btnStop') }}
         </button>
         <button
           v-if="!isRunning(task)"
           class="text-xs px-3 py-1.5 bg-red-900/60 hover:bg-red-700 text-red-200 rounded-lg transition"
-          @click="deleteTaskById(task.task_id)"
+          @click.stop="deleteTaskById(task.task_id)"
         >
           {{ t('deleteTask') }}
         </button>

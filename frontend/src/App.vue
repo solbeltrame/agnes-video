@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { nextTick, ref, onMounted } from 'vue'
 import { t } from '@/i18n'
 import { useTheme } from '@/composables/useTheme'
 import { useToast } from '@/composables/useToast'
@@ -23,6 +23,8 @@ import LangSwitcher from '@/components/shared/LangSwitcher.vue'
 import QuickVideoPanel from '@/components/QuickVideoPanel.vue'
 import ApiKeyModal from '@/components/ApiKeyModal.vue'
 import SettingsIcon from '@/components/shared/SettingsIcon.vue'
+import { useModalA11y } from '@/composables/useModalA11y'
+import type { TaskListItem } from '@/types'
 
 const { themeIcon, themeLabel, cycleTheme } = useTheme()
 const { visible: toastVisible, message: toastMessage, type: toastType } = useToast()
@@ -34,6 +36,32 @@ const { loadGallery, startGalleryTimer, stopGalleryTimer } = useGallery()
 const advancedMode = ref(false)
 const apiKeyModalOpen = ref(false)
 const recentTasksEmpty = ref(true)
+const completedVideosOpen = ref(false)
+const taskDetailsOpen = ref(false)
+const { containerRef: completedVideosModalRef } = useModalA11y(completedVideosOpen, () => { completedVideosOpen.value = false })
+const { containerRef: taskDetailsModalRef } = useModalA11y(taskDetailsOpen, () => { void closeTaskDetails() })
+
+function openCompletedVideos() {
+  completedVideosOpen.value = true
+}
+
+function openTaskDetails(task: TaskListItem) {
+  appState.progressTaskId = task.task_id
+  appState.currentTaskId = task.task_id
+  appState.currentDirName = task.dir_name || task.task_id
+  appState.currentTaskType = task.task_type || 'creative'
+  appState.currentArtifactsTaskId = task.task_id
+  taskDetailsOpen.value = true
+}
+
+async function closeTaskDetails() {
+  taskDetailsOpen.value = false
+  await nextTick()
+  appState.progressTaskId = null
+  appState.currentTaskId = null
+  appState.currentDirName = null
+  appState.currentArtifactsTaskId = null
+}
 
 function switchMainTab(tab: 'create' | 'list' | 'simple' | 'gallery') {
   appState.view = tab
@@ -132,7 +160,7 @@ onMounted(async () => {
         <span class="text-base font-semibold tracking-tight text-ink sm:text-lg">Agnes Studio</span>
       </div>
       <div class="flex shrink-0 items-center gap-1 sm:gap-2">
-        <button class="hidden items-center rounded-full px-3 py-2 text-xs text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500 sm:inline-flex" @click="switchMainTab('list')">Meus vídeos</button>
+        <button class="inline-flex items-center rounded-full px-3 py-2 text-xs text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500" @click="openCompletedVideos">Meus vídeos</button>
         <button class="inline-flex items-center rounded-full px-2 py-2 text-[11px] text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500 sm:px-3 sm:text-xs" @click="advancedMode = true">Modo Avançado</button>
         <button
           type="button"
@@ -159,7 +187,7 @@ onMounted(async () => {
             <p class="mt-1 text-xs text-muted sm:text-sm">Tarefas em andamento e finalizadas nas últimas 24 horas.</p>
           </div>
         </div>
-        <TaskListPanel scope="recent" @view-all="switchMainTab('list')" @empty-change="recentTasksEmpty = $event" />
+        <TaskListPanel scope="recent" @view-completed="openCompletedVideos" @open-task="openTaskDetails" @empty-change="recentTasksEmpty = $event" />
       </div>
     </section>
     <QuickVideoPanel :models-ready="isConfigLoaded" />
@@ -182,7 +210,7 @@ onMounted(async () => {
         <h1 class="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Meus vídeos</h1>
         <p class="mt-2 text-sm text-muted">Histórico completo das suas tarefas.</p>
       </div>
-      <TaskListPanel scope="all" />
+      <TaskListPanel scope="all" @open-task="openTaskDetails" />
     </section>
   </main>
 
@@ -321,6 +349,33 @@ onMounted(async () => {
       </div>
     </aside>
   </div>
+
+  <Teleport to="body">
+    <div v-if="completedVideosOpen" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm sm:p-6" @click.self="completedVideosOpen = false">
+      <section ref="completedVideosModalRef" class="flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-rule bg-paper shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="completed-videos-title">
+        <header class="flex shrink-0 items-center justify-between gap-3 border-b border-rule/60 px-5 py-4 sm:px-7">
+          <div>
+            <h2 id="completed-videos-title" class="text-lg font-semibold text-ink">Meus vídeos</h2>
+            <p class="mt-0.5 text-xs text-muted">Vídeos concluídos</p>
+          </div>
+          <button type="button" class="flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted transition hover:bg-paper-3 hover:text-ink" aria-label="Fechar Meus vídeos" @click="completedVideosOpen = false">×</button>
+        </header>
+        <div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <TaskListPanel scope="completed" @open-task="openTaskDetails" />
+        </div>
+      </section>
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div v-if="taskDetailsOpen" class="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-5" @click.self="closeTaskDetails">
+      <section ref="taskDetailsModalRef" class="h-[96dvh] max-h-[1000px] w-full max-w-6xl overflow-hidden rounded-3xl border border-rule bg-paper shadow-2xl sm:h-[92dvh]" role="dialog" aria-modal="true" aria-label="Detalhes da tarefa">
+        <div class="h-full overflow-y-auto">
+          <ProgressPage embedded @close="closeTaskDetails" />
+        </div>
+      </section>
+    </div>
+  </Teleport>
 
   <!-- Voice Picker Modal -->
   <ApiKeyModal v-model:open="apiKeyModalOpen" />

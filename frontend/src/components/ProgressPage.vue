@@ -13,6 +13,9 @@ import FeedbackPanel from './FeedbackPanel.vue'
 import RefreshIcon from '@/components/shared/RefreshIcon.vue'
 import { isDeterministicError, isLocalNetworkError } from '@/utils/feedback'
 
+const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+const emit = defineEmits<{ close: [] }>()
+
 const {
   progressPct,
   progressMessage,
@@ -187,8 +190,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="progress-page min-h-screen bg-paper">
-    <ProgressHeader :task-title="taskInfo?.title || taskInfo?.creative_name || ''" />
+  <div class="progress-page bg-paper" :class="props.embedded ? 'min-h-0' : 'min-h-screen'">
+    <ProgressHeader :task-title="taskInfo?.title || taskInfo?.creative_name || ''" :embedded="props.embedded" @close="emit('close')" />
 
     <div class="mx-auto max-w-5xl px-4 py-6 sm:py-8 lg:flex lg:gap-6">
       <!-- Linha do tempo do processo -->
