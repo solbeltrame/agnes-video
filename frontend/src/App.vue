@@ -46,6 +46,7 @@ function openCompletedVideos() {
 }
 
 function openTaskDetails(task: TaskListItem) {
+  completedVideosOpen.value = false
   appState.progressTaskId = task.task_id
   appState.currentTaskId = task.task_id
   appState.currentDirName = task.dir_name || task.task_id
