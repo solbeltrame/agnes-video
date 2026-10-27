@@ -20,6 +20,7 @@ import VoicePickerModal from '@/components/VoicePickerModal.vue'
 import Toast from '@/components/Toast.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import LangSwitcher from '@/components/shared/LangSwitcher.vue'
+import QuickVideoPanel from '@/components/QuickVideoPanel.vue'
 
 const { themeIcon, themeLabel, cycleTheme } = useTheme()
 const { visible: toastVisible, message: toastMessage, type: toastType } = useToast()
@@ -28,9 +29,11 @@ const { initVoiceSelector } = useVoice()
 const { loadTaskList, startTaskListTimer, stopTaskListTimer } = useTasks()
 const { parseHash } = useNavigation()
 const { loadGallery, startGalleryTimer, stopGalleryTimer } = useGallery()
+const advancedMode = ref(false)
 
 function switchMainTab(tab: 'create' | 'list' | 'simple' | 'gallery') {
   appState.view = tab
+  if (tab === 'create') advancedMode.value = true
   location.hash =
     tab === 'list' ? '#/list' : tab === 'simple' ? '#/simple' : tab === 'gallery' ? '#/gallery' : '#/create'
   if (tab === 'list') {
@@ -43,6 +46,26 @@ function switchMainTab(tab: 'create' | 'list' | 'simple' | 'gallery') {
     stopTaskListTimer()
     stopGalleryTimer()
   }
+}
+
+function returnToQuickMode() {
+  advancedMode.value = false
+  appState.view = 'create'
+  location.hash = '#/create'
+}
+
+function openQuickHome() {
+  advancedMode.value = false
+  appState.view = 'create'
+  stopTaskListTimer()
+  stopGalleryTimer()
+  location.hash = '#/create'
+}
+
+function openAdvancedMode() {
+  advancedMode.value = true
+  appState.view = 'create'
+  location.hash = '#/create'
 }
 
 const isConfigLoaded = ref(false)
@@ -60,6 +83,9 @@ onMounted(async () => {
     if (parsed.view === 'gallery') {
       loadGallery()
       startGalleryTimer()
+    } else if (parsed.view === 'list') {
+      loadTaskList()
+      startTaskListTimer()
     }
   }
 
@@ -91,32 +117,53 @@ onMounted(async () => {
     console.error('init voice selector error:', e)
   }
 
-  // 自动重连运行中的任务（已在进度页时跳过，由 ProgressPage 恢复）
-  if (appState.view !== 'progress') {
-    autoReconnectRunningTask()
-  }
 })
-
-async function autoReconnectRunningTask() {
-  try {
-    const d = await fetch('/api/tasks').then((r) => r.json())
-    const running = (d.tasks || []).find((t: any) => t.status === 'running' || t.status === 'queued')
-    if (running) {
-      appState.currentTaskType = running.task_type || 'creative'
-      appState.currentDirName = running.dir_name || running.task_id
-      appState.progressTaskId = running.task_id
-      appState.progressOrigin = 'create'
-      appState.view = 'progress'
-      location.hash = '#/progress/' + encodeURIComponent(running.task_id)
-    }
-  } catch {
-    /* ignore */
-  }
-}
 </script>
 
 <template>
   <ProgressPage v-if="appState.view === 'progress'" />
+
+  <main v-else-if="appState.view === 'create' && !advancedMode" class="studio-shell min-h-screen px-4 py-5 sm:py-8">
+    <header class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 pb-8">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-xl text-white shadow-lg shadow-violet-600/20">✦</div>
+        <span class="text-lg font-semibold tracking-tight text-ink">Agnes Studio</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="inline-flex items-center rounded-full px-3.5 py-2 text-xs text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500" @click="switchMainTab('list')">Meus vídeos</button>
+        <button class="hidden items-center rounded-full px-3.5 py-2 text-xs text-ink-2 transition hover:bg-violet-500/10 hover:text-violet-500 sm:inline-flex" @click="advancedMode = true">Modo Avançado</button>
+        <LangSwitcher />
+      </div>
+    </header>
+    <QuickVideoPanel :models-ready="isConfigLoaded" @advanced="advancedMode = true" />
+    <div class="mx-auto mt-6 max-w-3xl text-center">
+      <button class="text-xs text-muted transition hover:text-ink-2 sm:hidden" @click="advancedMode = true">Modo Avançado</button>
+    </div>
+  </main>
+
+  <main v-else-if="appState.view === 'list'" class="studio-shell min-h-screen px-4 py-5 sm:py-8">
+    <header class="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 pb-8">
+      <button class="flex items-center gap-3 text-left" @click="openQuickHome">
+        <span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-xl text-white shadow-lg shadow-violet-600/20">✦</span>
+        <span class="text-lg font-semibold tracking-tight text-ink">Agnes Studio</span>
+      </button>
+      <div class="flex items-center gap-2">
+        <button class="rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-violet-600/20 transition hover:bg-violet-700" @click="openQuickHome">＋ Novo vídeo</button>
+        <LangSwitcher />
+      </div>
+    </header>
+    <section class="mx-auto max-w-5xl">
+      <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Agnes Studio</p>
+          <h1 class="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Meus vídeos</h1>
+          <p class="mt-2 text-sm text-muted">Acompanhe o progresso e acesse seus vídeos gerados.</p>
+        </div>
+        <button class="rounded-full border border-rule px-4 py-2 text-xs font-medium text-ink-2 transition hover:border-violet-400 hover:text-violet-500" @click="openAdvancedMode">Modo Avançado</button>
+      </div>
+      <TaskListPanel />
+    </section>
+  </main>
 
   <div v-else class="flex justify-center gap-3 px-4">
     <!-- Left sidebar -->
@@ -174,6 +221,10 @@ async function autoReconnectRunningTask() {
       <!-- Config Panel -->
       <ConfigPanel />
 
+      <div class="mb-4 flex justify-end">
+        <button class="text-sm text-muted transition hover:text-accent" @click="returnToQuickMode">← Voltar ao Modo Rápido</button>
+      </div>
+
       <!-- Main Tabs -->
       <div class="flex gap-2 mb-6">
         <button
@@ -182,13 +233,6 @@ async function autoReconnectRunningTask() {
           @click="switchMainTab('create')"
         >
           {{ t('tabCreate') }}
-        </button>
-        <button
-          class="px-5 py-2.5 rounded-lg text-sm font-medium transition"
-          :class="appState.view === 'list' ? 'tab-active' : 'tab-inactive'"
-          @click="switchMainTab('list')"
-        >
-          {{ t('tabList') }}
         </button>
         <button
           class="px-5 py-2.5 rounded-lg text-sm font-medium transition"
@@ -214,11 +258,6 @@ async function autoReconnectRunningTask() {
       <!-- Simple Panel -->
       <div v-show="appState.view === 'simple'">
         <SimplePanel @go-list="switchMainTab('list')" />
-      </div>
-
-      <!-- List Panel -->
-      <div v-show="appState.view === 'list'">
-        <TaskListPanel />
       </div>
 
       <!-- Gallery Panel (P1, 只读) -->
@@ -269,3 +308,7 @@ async function autoReconnectRunningTask() {
   <Toast :visible="toastVisible" :message="toastMessage" :type="toastType" />
   <ConfirmModal />
 </template>
+
+<style scoped>
+.studio-shell { background: radial-gradient(ellipse at 50% -15%, rgba(139, 92, 246, .12), transparent 55%); }
+</style>

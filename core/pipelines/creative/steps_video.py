@@ -571,6 +571,7 @@ class VideoStepsMixin:
                 duration=self._scene_duration(scene_idx),
                 width=vw,
                 height=vh,
+                keyframe=True,
                 # U1（v7.0）：队列满时实时向前端推「排队重试中」
                 progress_callback=self._submit_progress_callback(
                     "video_gen",

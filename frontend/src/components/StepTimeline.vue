@@ -71,24 +71,24 @@ function iconFor(state: Item['state']): string {
 }
 
 function clsFor(state: Item['state']): string {
-  if (state === 'done') return 'text-green-400'
-  if (state === 'running') return 'text-accent'
-  if (state === 'awaiting') return 'text-amber-400'
+  if (state === 'done') return 'text-emerald-600'
+  if (state === 'running') return 'text-violet-600'
+  if (state === 'awaiting') return 'text-amber-700'
   return 'text-muted'
 }
 </script>
 
 <template>
-  <div v-if="!props.horizontal" class="glass-card rounded-2xl p-4">
-    <div class="text-xs text-muted mb-3">{{ t('ppStages') }}</div>
-    <div class="space-y-0.5">
+  <div v-if="!props.horizontal" class="rounded-2xl bg-paper">
+    <div class="mb-3 px-2 text-xs font-semibold text-ink-2">{{ t('ppStages') }}</div>
+    <div class="space-y-1">
       <button
         v-for="item in items"
         :key="item.key"
         class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-sm transition"
         :class="[
-          item.state === 'awaiting' ? 'bg-amber-500/10 border border-amber-500/30' : 'hover:bg-paper-2/40 border border-transparent',
-          item.state === 'running' ? 'bg-accent/5 border border-accent/20' : '',
+          item.state === 'awaiting' ? 'bg-amber-500/10 border border-amber-500/25' : 'hover:bg-violet-500/5 border border-transparent',
+          item.state === 'running' ? 'bg-violet-500/5 border border-violet-500/15' : '',
         ]"
         @click="onLocate(item)"
       >
@@ -96,8 +96,8 @@ function clsFor(state: Item['state']): string {
           class="w-4 text-center shrink-0"
           :class="[clsFor(item.state), item.state === 'running' ? 'animate-pulse' : '']"
         >{{ iconFor(item.state) }}</span>
-        <span class="truncate" :class="item.state === 'awaiting' ? 'text-amber-400 font-medium' : ''">{{ item.label }}</span>
-        <span v-if="item.state === 'awaiting'" class="ml-auto text-[10px] text-amber-400 shrink-0">{{ t('ppWaiting') }}</span>
+        <span class="truncate" :class="item.state === 'awaiting' ? 'text-amber-700 font-medium' : 'text-ink-2'">{{ item.label }}</span>
+        <span v-if="item.state === 'awaiting'" class="ml-auto shrink-0 text-[10px] text-amber-700">{{ t('ppWaiting') }}</span>
       </button>
     </div>
   </div>
@@ -109,9 +109,9 @@ function clsFor(state: Item['state']): string {
       :key="item.key"
       class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition"
       :class="[
-        item.state === 'awaiting' ? 'bg-amber-500/10 border-amber-500/40 text-amber-400' : 'bg-paper/50 border-rule/60 text-ink-2',
-        item.state === 'running' ? 'border-accent/40 text-accent' : '',
-        item.state === 'done' ? 'text-green-400' : '',
+        item.state === 'awaiting' ? 'bg-amber-500/10 border-amber-500/30 text-amber-700' : 'bg-paper border-rule/60 text-ink-2',
+        item.state === 'running' ? 'border-violet-400/50 text-violet-600' : '',
+        item.state === 'done' ? 'text-emerald-600' : '',
       ]"
       @click="onLocate(item)"
     >

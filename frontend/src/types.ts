@@ -52,6 +52,13 @@ export interface TaskListItem {
   scene_count?: number
   paragraph_count?: number
   dir_name?: string
+  current_step?: string
+  current_status?: string
+  current_progress?: number
+  current_message?: string
+  current_message_key?: string
+  current_message_params?: Record<string, string | number>
+  active?: boolean
   // v6.0 手动模式
   current_mode?: 'auto' | 'manual'
   current_checkpoint?: string

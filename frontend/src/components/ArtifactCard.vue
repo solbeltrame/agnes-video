@@ -65,7 +65,7 @@ async function onCopyPath() {
 </script>
 
 <template>
-  <div class="artifact-card flex items-start gap-3 p-3 bg-paper-2/30 rounded-xl border border-rule/40">
+  <div class="artifact-card flex items-start gap-3 rounded-2xl border border-rule/60 bg-paper-2/20 p-3 sm:p-4">
     <span class="text-lg mt-0.5 shrink-0">{{ artifactIcon(art) }}</span>
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2 mb-1">
@@ -77,7 +77,7 @@ async function onCopyPath() {
       <img
         v-if="art.category === 'image'"
         :src="artifactFileUrl(art)"
-        class="rounded-lg cursor-pointer border border-rule/50"
+        class="cursor-pointer rounded-xl border border-rule/50"
         :class="large ? 'w-full max-h-[400px]' : 'max-h-36'"
         loading="lazy"
         @click="openImageModal(artifactFileUrl(art))"
@@ -89,7 +89,7 @@ async function onCopyPath() {
         controls
         playsinline
         preload="metadata"
-        class="w-full rounded-lg border border-rule/50 bg-black"
+        class="w-full rounded-xl border border-rule/50 bg-black"
         :style="large ? 'max-height: 460px' : 'max-height: 260px'"
       ></video>
       <!-- 音频预览 -->
@@ -97,7 +97,7 @@ async function onCopyPath() {
       <!-- 文本 / JSON 预览 -->
       <pre
         v-else
-        class="text-xs text-muted overflow-auto bg-paper/70 p-2 rounded-lg border border-rule/40 cursor-pointer whitespace-pre-wrap"
+        class="cursor-pointer overflow-auto whitespace-pre-wrap rounded-xl border border-rule/40 bg-paper p-3 text-xs text-muted"
         :class="large ? 'max-h-64' : 'max-h-24'"
         @click="onPreviewClick"
       >{{ previewExpanded ? (previewLoading ? t('loading') + '...' : previewText) : t('clickToPreview') }}</pre>
@@ -114,7 +114,7 @@ async function onCopyPath() {
     <!-- 删除 -->
     <button
       v-if="art.deletable && !isRunning"
-      class="text-xs px-2 py-1 bg-red-700/50 hover:bg-red-600 text-red-100 rounded transition shrink-0"
+      class="shrink-0 rounded-full border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-xs text-red-600 transition hover:bg-red-500/10"
       :title="t('delete')"
       @click="confirmDeleteArtifact(art)"
     >

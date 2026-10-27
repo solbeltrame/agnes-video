@@ -1196,7 +1196,7 @@ VIDEO_MODEL_CAPABILITIES = {
         },
         "modes": [
             {"id": "text", "label": {"zh": "文生视频", "en": "Text to video"}},
-            {"id": "keyframe", "label": {"zh": "首尾帧（自动降级图片参考）", "en": "First/last frame (auto fallback)"}},
+            {"id": "keyframe", "label": {"zh": "首尾帧控制", "en": "First/last frame control"}},
             {"id": "reference", "label": {"zh": "图片/音频参考", "en": "Image/audio reference"}},
         ],
         "durations": VIDEO_25_DURATIONS,
@@ -1219,7 +1219,7 @@ VIDEO_MODEL_CAPABILITIES = {
         "price_text": {"zh": "免费（限时）", "en": "Free (limited time)"},
         "modes": [
             {"id": "text", "label": {"zh": "文生视频", "en": "Text to video"}},
-            {"id": "keyframe", "label": {"zh": "首尾帧（自动降级图片参考）", "en": "First/last frame (auto fallback)"}},
+            {"id": "keyframe", "label": {"zh": "首尾帧控制", "en": "First/last frame control"}},
             {"id": "reference", "label": {"zh": "图片参考（≤5 张）", "en": "Image reference (≤5)"}},
         ],
         "durations": VIDEO_25_DURATIONS,

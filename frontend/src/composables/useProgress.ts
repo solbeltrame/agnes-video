@@ -38,6 +38,7 @@ const liveFailedStep = ref('')
 const awaitingCheckpoint = ref('')
 // v6.1 问题反馈：当前任务的重试次数（驱动反馈区渐进展开）
 const retryCount = ref(0)
+const retrying = ref(false)
 // v6.1：任务未完成但后台无活跃 pipeline → 待续传（展示续传入口）
 const needsResume = ref(false)
 
@@ -247,6 +248,8 @@ async function resumeTask(taskId: string) {
 // v6.1 问题反馈：失败任务重试（复用 resume 断点续传；被接受后重试计数 +1，
 // 计数驱动失败面板「先重试、后上报」的渐进引导）
 async function retryFailedTask(taskId: string) {
+  if (!taskId || retrying.value) return
+  retrying.value = true
   try {
     const d = await api.resumeTask(taskId)
     if (!d.ok) {
@@ -261,6 +264,8 @@ async function retryFailedTask(taskId: string) {
     startPolling(taskId)
   } catch (e: any) {
     showToast(t('failResume') + (e.message ? ': ' + e.message : ''), 3500)
+  } finally {
+    retrying.value = false
   }
 }
 
@@ -431,6 +436,7 @@ export function useProgress() {
     awaitingCheckpoint,
     needsResume,
     retryCount,
+    retrying,
     connectionLost,
     retryFailedTask,
     resumeTask,

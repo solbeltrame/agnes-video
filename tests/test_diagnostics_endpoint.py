@@ -56,9 +56,7 @@ class TestTaskManagerTimestamps:
     def test_create_sets_timestamps(self, tmp_path, monkeypatch):
         from core.task_manager import TaskManager
         from models.task import CreativeVideoTask
-        from core import config as cfg
-
-        monkeypatch.setattr(cfg, "get_working_dir", lambda: str(tmp_path))
+        monkeypatch.setattr("core.task_manager.get_working_dir", lambda: str(tmp_path))
         tm = TaskManager("t_ts", dir_name="t_ts")
         state = tm.create(CreativeVideoTask())
         assert state.created_at  # 非空
@@ -70,9 +68,7 @@ class TestTaskManagerTimestamps:
     def test_update_refreshes_updated_at(self, tmp_path, monkeypatch):
         from core.task_manager import TaskManager
         from models.task import CreativeVideoTask, StepStatus
-        from core import config as cfg
-
-        monkeypatch.setattr(cfg, "get_working_dir", lambda: str(tmp_path))
+        monkeypatch.setattr("core.task_manager.get_working_dir", lambda: str(tmp_path))
         tm = TaskManager("t_ts2", dir_name="t_ts2")
         state = tm.create(CreativeVideoTask())
         old_created = state.created_at
@@ -122,9 +118,7 @@ class TestErrorTaskId:
 @pytest.fixture
 def diag_client(monkeypatch, tmp_path):
     """挂载 task_routes，并让 TaskManager 指向 tmp_path。"""
-    from core import config as cfg
-
-    monkeypatch.setattr(cfg, "get_working_dir", lambda: str(tmp_path))
+    monkeypatch.setattr("core.task_manager.get_working_dir", lambda: str(tmp_path))
     # 用真实 TaskManager 落盘一个失败任务
     from core.task_manager import TaskManager
     from models.task import CreativeVideoTask, StepStatus

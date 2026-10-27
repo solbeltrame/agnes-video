@@ -53,11 +53,21 @@ async def list_tasks(limit: int = 0, offset: int = 0, status: str = ""):
         tasks = tasks[:limit]
 
     for t in tasks:
+        t["active"] = (
+            t["task_id"] in app_state.active_pipelines
+            or t["task_id"] in app_state._queued_tasks
+        )
         task_tm = TaskManager(t["task_id"], dir_name=t.get("dir_name"))
         state = task_tm.load()
         if state:
             t["final_video_file"] = state.final_video_file
             t["task_type"] = state.task_type
+            t["current_step"] = state.current_step
+            t["current_status"] = state.current_status
+            t["current_progress"] = state.current_progress
+            t["current_message"] = state.current_message
+            t["current_message_key"] = state.current_message_key
+            t["current_message_params"] = state.current_message_params
             # 创意视频特有字段
             if isinstance(state, CreativeVideoTask):
                 t["scene_count"] = state.scene_count

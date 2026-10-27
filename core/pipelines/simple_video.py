@@ -13,7 +13,7 @@ from typing import Callable, Optional
 from core.api.agnes_video import AgnesVideoAPI
 from core.config import DEFAULT_TEXT_MODEL
 from core.pipelines import BasePipeline, PipelineShutdown
-from models.task import SimpleVideoTask, StepStatus
+from models.task import SimpleVideoTask, StepStatus, VideoMode
 from utils.network import (
     describe_network_error,
     describe_queue_full_error,
@@ -57,6 +57,10 @@ class SimpleVideoPipeline(BasePipeline):
         """执行简单视频生成流水线。"""
         self._state = state
         self._state.status = StepStatus.RUNNING
+        # Clear a previous failed attempt's traceback before retrying. Otherwise
+        # the live task can show as running while diagnostics still expose the
+        # stale error from its last run.
+        self._state.error_traceback = ""
         self.task_manager.create(self._state)
 
         await self._emit("init", "running", self._t("progress.simple.start"), _PROGRESS_INIT)
@@ -172,6 +176,7 @@ class SimpleVideoPipeline(BasePipeline):
             seed=self._state.seed,
             negative_prompt=self._state.negative_prompt,
             video_size=getattr(self._state, "video_size", None) or "720P",
+            keyframe=(self._state.mode == VideoMode.KEYFRAMES and len(ref_images) == 2),
             # U1（v7.0）：队列满时实时向前端推「排队重试中」
             progress_callback=self._submit_progress_callback("video_gen", _PROGRESS_SUBMIT),
         )

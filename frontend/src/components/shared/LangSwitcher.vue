@@ -22,18 +22,8 @@ const triggerClass = computed(() =>
     : 'flex items-center gap-1 px-2 py-2 text-sm text-ink-2 hover:text-ink hover:bg-paper-2 rounded-lg transition-colors',
 )
 
-// 语言名映射（label 形如 "🇨🇳 中文"）+ 地区分组（与官网 langGroups 一致）
-const labelOf: Record<string, string> = Object.fromEntries(LANGS.map((l) => [l.code, l.label]))
-const groups: { id: string; items: string[] }[] = [
-  { id: 'langGroupEastAsia', items: ['zh', 'ja', 'ko'] },
-  { id: 'langGroupSoutheastAsia', items: ['ms', 'id', 'vi', 'th', 'tl'] },
-  { id: 'langGroupSouthAsia', items: ['hi', 'bn', 'ur'] },
-  { id: 'langGroupMiddleEast', items: ['tr', 'ar', 'fa'] },
-  { id: 'langGroupEurope', items: ['en', 'de', 'fr', 'nl', 'es', 'pt', 'it', 'ru'] },
-]
-
 // 触发按钮只显示旗帜
-const currentFlag = computed(() => (labelOf[currentLang.value] || '🌐').split(' ')[0])
+const currentFlag = computed(() => (LANGS.find((lang) => lang.code === currentLang.value)?.label || '🌐').split(' ')[0])
 
 function pick(code: string) {
   switchLang(code)
@@ -89,23 +79,20 @@ onBeforeUnmount(() => {
     </button>
 
     <div v-if="open" class="lang-menu">
-      <div v-for="g in groups" :key="g.id" class="lang-group">
-        <p class="lang-group-title">{{ t(g.id) }}</p>
-        <button
-          v-for="code in g.items"
-          :key="code"
-          type="button"
-          class="lang-item"
-          :class="{ 'is-active': code === currentLang }"
-          :aria-current="code === currentLang ? 'true' : undefined"
-          :lang="code"
-          :title="labelOf[code]"
-          @click="pick(code)"
-        >
-          <span class="lang-name">{{ labelOf[code] }}</span>
-          <span v-if="code === currentLang" class="lang-check" aria-hidden="true">✓</span>
-        </button>
-      </div>
+      <button
+        v-for="language in LANGS"
+        :key="language.code"
+        type="button"
+        class="lang-item"
+        :class="{ 'is-active': language.code === currentLang }"
+        :aria-current="language.code === currentLang ? 'true' : undefined"
+        :lang="language.code === 'pt' ? 'pt-BR' : 'en-US'"
+        :title="language.label"
+        @click="pick(language.code)"
+      >
+        <span class="lang-name">{{ language.label }}</span>
+        <span v-if="language.code === currentLang" class="lang-check" aria-hidden="true">✓</span>
+      </button>
     </div>
   </div>
 </template>

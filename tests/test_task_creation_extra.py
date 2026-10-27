@@ -45,6 +45,13 @@ class _StubTaskManager:
 @pytest.fixture
 def env(monkeypatch, tmp_path):
     """写路径隔离：api key / 上传目录 / pipeline 工厂 / 后台任务 / TaskManager 全打桩。"""
+    created_states = []
+
+    class CapturingTaskManager(_StubTaskManager):
+        def create(self, state):
+            self.state = state
+            created_states.append(state)
+
     monkeypatch.setattr(task_creation_routes, "get_api_key", lambda: "test-api-key")
     up = str(tmp_path / "uploads")
     monkeypatch.setattr(helpers, "get_upload_dir", lambda: up)
@@ -60,8 +67,8 @@ def env(monkeypatch, tmp_path):
         coro.close()
 
     monkeypatch.setattr(task_creation_routes.app_state, "launch_background_task", fake_launch)
-    monkeypatch.setattr(task_creation_routes, "TaskManager", _StubTaskManager)
-    return {"uploads": up, "launched": launched}
+    monkeypatch.setattr(task_creation_routes, "TaskManager", CapturingTaskManager)
+    return {"uploads": up, "launched": launched, "created_states": created_states}
 
 
 def _real_png_bytes() -> bytes:
@@ -86,13 +93,17 @@ class TestSimpleRich:
     def test_uploads_reference_and_end_frame(self, client, env):
         resp = client.post(
             "/api/tasks/simple",
-            data={"prompt": "test", "mode": "i2v", "duration": "5", "video_size": "1080P"},
+            data={"prompt": "test", "mode": "keyframes", "duration": "5", "video_size": "1080P"},
             files=[("reference_image", _file("ref.png")), ("end_frame_image", _file("end.png"))],
         )
         assert resp.status_code == 200
         assert os.listdir(env["uploads"]), "应落盘上传文件"
         saved = sorted(os.listdir(env["uploads"]))
         assert any("_ref" in f for f in saved) and any("_end" in f for f in saved)
+        state = env["created_states"][-1]
+        assert state.mode.value == "keyframes"
+        assert state.reference_image.endswith("_ref.png")
+        assert state.end_frame_image.endswith("_end.png")
 
     def test_keyframes_mode(self, client, env):
         resp = client.post(

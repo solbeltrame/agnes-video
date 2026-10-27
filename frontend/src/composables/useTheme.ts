@@ -11,7 +11,7 @@ const THEME_ICON_PATHS: Record<ThemeMode, string> = {
 }
 
 const THEME_LABELS: Record<string, Record<ThemeMode, string>> = {
-  zh: { system: '主题：跟随系统', light: '主题：亮色', dark: '主题：暗色' },
+  pt: { system: 'Tema: seguir o sistema', light: 'Tema: claro', dark: 'Tema: escuro' },
   en: { system: 'Theme: System', light: 'Theme: Light', dark: 'Theme: Dark' },
 }
 
@@ -51,7 +51,7 @@ function themeApply(mode: ThemeMode) {
 const themeIcon = computed(() => THEME_ICON_PATHS[storedMode.value])
 
 const themeLabel = computed(() => {
-  const table = THEME_LABELS[currentLang.value] || THEME_LABELS.zh
+  const table = THEME_LABELS[currentLang.value] || THEME_LABELS.pt
   return table[storedMode.value]
 })
 

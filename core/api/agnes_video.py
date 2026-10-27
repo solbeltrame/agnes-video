@@ -920,6 +920,7 @@ class AgnesVideoAPI:
         seed: Optional[int] = None,
         negative_prompt: Optional[str] = None,
         progress_callback=None,
+        keyframe: bool = False,
         **kwargs,
     ) -> str:
         # 2.5 系列为标准协议（v6.2）：mode / seconds / size / aspect_ratio。
@@ -933,6 +934,7 @@ class AgnesVideoAPI:
             height=height,
             seed=seed,
             progress_callback=progress_callback,
+            keyframe=keyframe,
             **kwargs,
         )
 
@@ -955,6 +957,7 @@ class AgnesVideoAPI:
         height: int = 720,
         seed: Optional[int] = None,
         progress_callback=None,
+        keyframe: bool = False,
         **kwargs,
     ) -> str:
         """2.5 / 2.5-flash 新协议提交：mode / seconds / size / aspect_ratio。
@@ -962,7 +965,7 @@ class AgnesVideoAPI:
         与 v2.0 的关键差异：
         - size 固定 720P（flash）或 720P/960P/2K（2.5）；不传 width/height/num_frames
         - seconds 为字符串 "4"–"12"
-        - 单参考图 → reference(images)；多图 → keyframe(first_frame + last_frame)
+        - 单参考图 → reference(images)；显式 keyframe → first_frame / last_frame
         - 不支持 negative_prompt（忽略）
         """
         # 时长：duration(秒) → seconds 字符串（4–12，超界截断）
@@ -992,17 +995,22 @@ class AgnesVideoAPI:
             resolved_refs.append(await self._resolve_image_ref(norm))
         n_refs = len(resolved_refs)
 
-        if n_refs == 1:
+        if keyframe:
+            if n_refs != 2:
+                raise ValueError("Keyframe generation requires exactly two frame images.")
+            payload["mode"] = "keyframe"
+            payload["first_frame"] = resolved_refs[0]
+            payload["last_frame"] = resolved_refs[1]
+            mode_desc = "keyframe (first + last frame)"
+        elif n_refs == 1:
             payload["mode"] = "reference"
             payload["images"] = resolved_refs
             mode_desc = "reference (1 image)"
         elif n_refs >= 2:
-            # v6.2.1: Agnes 2.5 系列 keyframe 模式固定输出 704x704 正方形
-            # （忽略 aspect_ratio，竖屏/横屏画面会被拉伸，人物显宽）。
-            # 降级为 reference 模式（多图参考，≤5 张），输出遵循 aspect_ratio。
+            # 调用方未声明帧语义时，多图仍按普通参考素材处理。
             payload["mode"] = "reference"
             payload["images"] = resolved_refs[:5]
-            mode_desc = f"reference ({n_refs} images, keyframe fallback)"
+            mode_desc = f"reference ({n_refs} images)"
         else:
             mode_desc = "text-to-video"
 

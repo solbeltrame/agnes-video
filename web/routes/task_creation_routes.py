@@ -297,6 +297,7 @@ async def _save_upload_file(
 @router.post("/api/tasks/simple")
 async def create_simple_task(
     prompt: str = Form(...),
+    creative_name: str = Form(""),
     mode: str = Form("t2v"),
     duration: int = Form(5),
     video_width: int = Form(768),
@@ -350,7 +351,7 @@ async def create_simple_task(
 
     state = SimpleVideoTask(
         task_id=task_id,
-        creative_name=f"simple_{task_id}",
+        creative_name=creative_name.strip() or f"simple_{task_id}",
         prompt=prompt,
         mode=video_mode,
         duration=duration,

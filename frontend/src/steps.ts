@@ -92,6 +92,9 @@ export function getStepsForType(taskType?: TaskType | string): StepDef[] {
 }
 
 export function isStepDoneInState(state: any, stepKey: string, taskType?: string): boolean {
+  // A simple task's submit stage completes when the API has persisted its task record.
+  // External video submission/polling is represented by the following video_gen stage.
+  if (taskType === 'simple' && stepKey === 'submit') return !!state?.task_id
   const map = STEP_FIELD_MAP[taskType as string] || STEP_FIELD_MAP.creative
   const field = map[stepKey]
   return field ? state[field] === 'completed' : false

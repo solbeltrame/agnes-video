@@ -22,11 +22,11 @@ import { currentLang } from '@/i18n'
 export const UI_LANG_HEADER = 'X-Agnes-UI-Lang'
 
 /**
- * 读取当前 UI 语言（与 ``useI18n().lang`` 同源），非法/空值回退 ``zh``。
+ * 读取当前 UI 语言（与 ``useI18n().lang`` 同源），非法/空值回退 ``pt``。
  */
 export function getUiLang(): string {
   const raw = (currentLang.value || '').trim()
-  return raw || 'zh'
+  return raw || 'pt'
 }
 
 /**

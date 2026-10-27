@@ -25,7 +25,9 @@ const {
   liveFailedStep,
   awaitingCheckpoint,
   retryCount,
+  retrying,
   connectionLost,
+  needsResume,
   retryFailedTask,
   mountProgressPage,
   unmountProgressPage,
@@ -184,66 +186,61 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="progress-page min-h-screen">
+  <div class="progress-page min-h-screen bg-paper">
     <ProgressHeader />
 
-    <div class="max-w-6xl mx-auto px-4 py-6 lg:flex lg:gap-6">
-      <!-- 左侧：支持项目卡片（置顶，与首页一致）+ 环节状态列表（宽屏） -->
-      <aside class="hidden lg:block w-[240px] shrink-0">
-        <div class="sticky top-[120px]">
-          <div class="sidebar-card">
-            <div class="stitle">{{ t('adSupportTitle') }}</div>
-            <p class="text-muted text-xs leading-relaxed mb-2">{{ t('adSupportDesc') }}</p>
-            <a href="https://github.com/lcy362/agnes-video-generator" target="_blank" rel="noopener">{{ t('adStar') }}</a>
-            <p class="text-muted text-xs px-1 -mt-0.5 mb-1">{{ t('adStarDesc') }}</p>
-            <a href="https://github.com/lcy362/flint" target="_blank" rel="noopener" class="wrap">{{ t('adSkewStar') }}</a>
-            <p class="text-muted text-xs px-1 -mt-0.5 mb-1">{{ t('adSkewStarDesc') }}</p>
-            <a href="https://video.lichuanyang.top" target="_blank" rel="noopener">{{ t('adAdblock') }}</a>
-            <p class="text-muted text-xs px-1 -mt-0.5 mb-1">{{ t('adAdblockDesc') }}</p>
-            <a href="https://video.lichuanyang.top" target="_blank" rel="noopener">{{ t('adClick') }}</a>
-            <p class="text-muted text-xs px-1 -mt-0.5 mb-1">{{ t('adClickDesc') }}</p>
-            <p class="text-muted text-xs mt-2 leading-relaxed">{{ t('adThanks') }}</p>
-          </div>
+    <div class="mx-auto max-w-5xl px-4 py-6 sm:py-8 lg:flex lg:gap-6">
+      <!-- Linha do tempo do processo -->
+      <aside class="hidden w-[220px] shrink-0 lg:block">
+        <div class="sticky top-24 rounded-3xl border border-rule/70 bg-paper p-3 shadow-sm">
           <StepTimeline @locate="scrollToStep" />
         </div>
       </aside>
 
       <!-- 主工作台 -->
       <main class="flex-1 min-w-0">
+        <div class="mb-5">
+          <p class="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Agnes Studio</p>
+          <h1 class="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">Acompanhamento da geração</h1>
+          <p class="mt-2 text-sm text-muted">Veja o progresso e os arquivos criados em cada etapa.</p>
+        </div>
+
         <!-- 移动端环节胶囊条 -->
-        <div class="lg:hidden mb-4">
+        <div class="mb-4 rounded-2xl border border-rule/70 bg-paper p-3 shadow-sm lg:hidden">
           <StepTimeline horizontal @locate="scrollToStep" />
         </div>
 
         <!-- 状态区 -->
-        <div class="glass-card rounded-2xl p-5 mb-4">
+        <div class="mb-4 rounded-3xl border border-rule/70 bg-paper p-5 shadow-lg shadow-violet-950/5 sm:p-6">
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm text-muted">{{ t('progress') }}</span>
-            <span class="text-sm text-accent font-medium">{{ progressPct }}%</span>
+            <span class="text-sm font-semibold text-violet-600">{{ progressPct }}%</span>
           </div>
           <div class="w-full bg-paper-2/50 rounded-full h-2.5 overflow-hidden">
-            <div class="bg-accent h-2.5 rounded-full transition-all duration-500" :style="{ width: progressPct + '%' }"></div>
+            <div class="h-2.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 transition-all duration-500" :style="{ width: progressPct + '%' }"></div>
           </div>
 
           <!-- 失败信息 -->
-          <div v-if="taskFailed" class="mt-4 p-4 bg-red-950 border border-red-800 rounded-lg space-y-2">
-            <p class="text-red-400 font-medium">{{ t('genFailed') }}</p>
+          <div v-if="taskFailed" class="mt-5 space-y-2 rounded-2xl border border-red-500/25 bg-red-500/5 p-4 sm:p-5">
+            <p class="font-semibold text-red-600">{{ t('genFailed') }}</p>
             <p class="text-muted text-xs">{{ failedMessage || t('genFailedMsg') }}</p>
             <!-- v7.3：队列满/上游 503 时的错峰重试建议（按浏览者所在时区换算，不同时区看到各自本地时间） -->
             <p v-if="retryWindowHint" class="text-xs text-accent leading-relaxed">{{ retryWindowHint }}</p>
             <!-- v6.1 问题反馈：重试引导（偶发故障优先断点续传自愈，多次失败再上报） -->
-            <div class="pt-2 border-t border-red-800/60 space-y-2">
+            <div class="space-y-2 border-t border-red-500/15 pt-3">
               <!-- 引导文案：网络/域名类 → 自查环境；确定性故障 → 建议直接反馈；其余 → 断点续传自愈 -->
               <p class="text-xs leading-relaxed" :class="retryIneffective ? 'text-amber-400' : 'text-muted'">
                 {{ networkError ? t('fbNetworkHint') : deterministicError ? t('fbDeterministicHint') : t('fbRetryHint') }}
               </p>
-              <div class="flex items-center gap-3 flex-wrap">
+              <div class="mt-3 flex flex-wrap items-center gap-3">
                 <button
-                  class="text-xs px-3 py-1.5 transition rounded-lg"
-                  :class="retryIneffective ? 'bg-paper-2/40 border border-rule text-muted hover:text-ink-2' : 'bg-accent text-accent-ink hover:opacity-90'"
+                  :disabled="retrying"
+                  class="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-600/20 transition hover:-translate-y-0.5 hover:bg-violet-700 hover:shadow-lg disabled:translate-y-0 disabled:cursor-wait disabled:opacity-60"
                   @click="onRetryTask"
                 >
-                  ↻ {{ t('fbRetryBtn') }}
+                  <span v-if="retrying" class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true"></span>
+                  <span v-else aria-hidden="true">↻</span>
+                  {{ retrying ? t('resuming') : t('fbRetryBtn') }}
                 </button>
                 <span v-if="retryCount > 0" class="text-xs text-muted">{{ t('fbRetriedN').replace('{n}', String(retryCount)) }}</span>
               </div>
@@ -261,28 +258,39 @@ onUnmounted(() => {
               />
             </div>
           </div>
+          <div v-else-if="needsResume" class="mt-5 flex flex-col gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div>
+              <p class="text-sm font-semibold text-amber-800">{{ t('taskNotRunning') }}</p>
+              <p class="mt-1 text-xs leading-relaxed text-muted">{{ t('taskNotRunningHint') }}</p>
+            </div>
+            <button :disabled="retrying" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-violet-600/20 transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-60" @click="onRetryTask">
+              <span v-if="retrying" class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true"></span>
+              <span v-else aria-hidden="true">↻</span>
+              {{ retrying ? t('resuming') : t('fbRetryBtn') }}
+            </button>
+          </div>
           <!-- 进度消息（HTML 渲染，来自后端安全文案） -->
-          <div v-else class="mt-4 text-sm text-muted" v-html="progressMessage"></div>
+          <div v-else-if="!needsResume" class="mt-4 text-sm text-muted" v-html="progressMessage"></div>
 
           <!-- 1.7：连接异常横幅（连续轮询失败 N 次后展示） -->
-          <div v-if="connectionLost" class="mt-3 rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-xs text-red-400">
+          <div v-if="connectionLost" class="mt-3 rounded-xl border border-red-500/25 bg-red-500/5 px-3 py-2 text-xs text-red-600">
             {{ t('connLost') }}
           </div>
         </div>
 
         <!-- 任务信息（用户输入提示词 + 各项配置，v6.1） -->
-        <div v-if="taskInfo" class="glass-card rounded-2xl mb-4 overflow-hidden">
-          <button class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-paper-2/30 transition" @click="taskInfoOpen = !taskInfoOpen">
+        <div v-if="taskInfo" class="mb-4 overflow-hidden rounded-3xl border border-rule/70 bg-paper shadow-sm">
+          <button class="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-violet-500/5 sm:px-5" @click="taskInfoOpen = !taskInfoOpen">
             <span class="text-sm transition-transform" :class="taskInfoOpen ? 'rotate-90' : ''">▸</span>
             <span class="text-sm font-medium text-ink-2">{{ t('taskInfo') }}</span>
             <span class="ml-auto text-xs text-muted">{{ taskInfoOpen ? t('ppCollapse') : t('ppExpand') }}</span>
           </button>
 
-          <div v-show="taskInfoOpen" class="px-4 pb-4 space-y-3">
+          <div v-show="taskInfoOpen" class="space-y-3 px-4 pb-5 sm:px-5">
             <!-- 输入提示词 -->
             <div v-for="f in taskInputs" :key="f.field" class="space-y-1">
               <div class="text-xs text-muted">{{ t(f.label) }}</div>
-              <p class="text-sm text-ink-2 bg-paper-2/30 rounded-lg px-3 py-2 whitespace-pre-wrap break-words leading-relaxed">
+              <p class="rounded-xl border border-rule/50 bg-paper-2/30 px-3 py-3 text-sm leading-relaxed text-ink-2 whitespace-pre-wrap break-words">
                 {{ taskInfo[f.field] || '—' }}
               </p>
             </div>
@@ -303,11 +311,11 @@ onUnmounted(() => {
             v-for="g in orderedGroups"
             :id="'artifact-group-' + g.stepKey"
             :key="g.stepKey"
-            class="artifact-group glass-card rounded-2xl overflow-hidden"
+            class="artifact-group mb-3 overflow-hidden rounded-3xl border border-rule/70 bg-paper shadow-sm"
             :class="g.stepKey === checkpointGroup ? 'border-amber-500/40 ring-1 ring-amber-500/20' : ''"
           >
             <button
-              class="w-full flex items-center gap-3 px-4 py-3 text-left transition hover:bg-paper-2/30"
+              class="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-violet-500/5 sm:px-5"
               :class="g.stepKey === checkpointGroup ? 'bg-amber-500/5' : ''"
               @click="toggleCollapse(g.stepKey)"
             >
@@ -318,7 +326,7 @@ onUnmounted(() => {
               <span class="ml-auto text-xs text-muted">{{ isCollapsed(g.stepKey) ? t('ppExpand') : t('ppCollapse') }}</span>
             </button>
 
-            <div v-show="!isCollapsed(g.stepKey)" class="px-4 pb-4 space-y-2" :class="g.stepKey === checkpointGroup ? 'px-5 pb-5' : ''">
+            <div v-show="!isCollapsed(g.stepKey)" class="space-y-2 px-4 pb-5 sm:px-5">
               <ArtifactCard v-for="art in g.items" :key="art.artifact_id" :art="art" :large="g.stepKey === checkpointGroup" />
             </div>
           </div>
@@ -332,35 +340,18 @@ onUnmounted(() => {
         />
 
         <!-- 结果视频 -->
-        <div v-if="resultVideoVisible" class="mt-4 p-4 glass-card rounded-2xl">
-          <p class="text-green-400 text-sm font-medium mb-2">{{ t('videoComplete') }}</p>
-          <video :src="resultVideoSrc" controls class="w-full rounded-lg max-h-96"></video>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs">
-            <span>🎉</span>
-            <a href="https://video.lichuanyang.top/learn" target="_blank" rel="noopener" class="text-accent hover:text-ink transition-colors">{{ t('doneTipTiktok') }}</a>
-            <span class="text-ink/10 select-none">·</span>
-            <a href="https://video.lichuanyang.top/learn" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('doneTipMore') }}</a>
+        <div v-if="resultVideoVisible" class="mt-4 rounded-3xl border border-emerald-500/20 bg-paper p-4 shadow-lg shadow-violet-950/5 sm:p-6">
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+              <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">✓</span>
+              <p class="text-sm font-semibold text-ink">{{ t('videoComplete') }}</p>
+            </div>
+            <a :href="resultVideoSrc" :download="'agnes-video-' + appState.progressTaskId + '.mp4'" class="rounded-full bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-700">↓ Baixar vídeo</a>
           </div>
+          <video :src="resultVideoSrc" controls playsinline class="max-h-[70vh] w-full rounded-2xl bg-black shadow-md"></video>
         </div>
 
         <!-- 官网导流资源（更多资源链接，与主页一致） -->
-        <div class="mt-8 border-t border-rule/30 pt-6 text-center">
-          <p class="text-xs text-muted mb-3">{{ t('moreResources') }}</p>
-          <div class="flex justify-center flex-wrap gap-x-5 gap-y-2 text-xs">
-            <a href="https://video.lichuanyang.top" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('projectHome') }}</a>
-            <a href="https://video.lichuanyang.top/demo" target="_blank" rel="noopener" class="text-accent hover:text-ink transition-colors">{{ t('onlineDemo') }}</a>
-            <a href="https://video.lichuanyang.top/guides/prompt-tips" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('usageGuide') }}</a>
-            <a href="https://video.lichuanyang.top/guides/prompt-tips" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('promptTips') }}</a>
-            <a href="https://video.lichuanyang.top/faq" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('faqTitle') }}</a>
-            <a href="https://video.lichuanyang.top/api-docs" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('modelOverview') }}</a>
-            <a href="https://video.lichuanyang.top/api-docs" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('apiCall') }}</a>
-            <a href="https://video.lichuanyang.top/api-docs" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('apiDocs') }}</a>
-            <a href="https://video.lichuanyang.top/learn" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('appScenarios') }}</a>
-            <a href="https://video.lichuanyang.top/zh/guides/free-ai-tools" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('agentMoreTools') }}</a>
-            <a href="https://github.com/lcy362/flint" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">{{ t('flintLinkLabel') }}</a>
-            <a href="https://github.com/lcy362/agnes-video-generator" target="_blank" rel="noopener" class="text-muted hover:text-ink-2 transition-colors">📖 GitHub</a>
-          </div>
-        </div>
       </main>
     </div>
 

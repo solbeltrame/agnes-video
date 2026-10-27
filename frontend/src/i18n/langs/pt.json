@@ -272,6 +272,7 @@
   "paragraphCount": "Parágrafos",
   "statusCompleted": "Concluído",
   "statusRunning": "Em andamento",
+  "statusRetrying": "Tentando novamente",
   "statusFailed": "Falhou",
   "statusPending": "Pendente",
   "statusQueued": "Na fila",

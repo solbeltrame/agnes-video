@@ -1,54 +1,34 @@
 import { ref, reactive, computed } from 'vue'
-// 1.8：i18n 懒加载——zh/en 静态预载（首屏用），其余 20 语言经
-// import.meta.glob 动态分包，切换时按需加载（首屏 JS 体积显著下降）
-import zh from './langs/zh.json'
+// Portuguese and English are the only selectable application languages.
+import pt from './langs/pt.json'
 import en from './langs/en.json'
 
-// 支持的语言列表（label 与官网 nav 语言菜单一致：旗帜 + 语言简称，便于多栏面板排版）
+// UI languages; codes stay aligned with the existing translation files and API headers.
 export const LANGS: { code: string; label: string }[] = [
-  { code: 'zh', label: '🇨🇳 中文' },
-  { code: 'en', label: '🇺🇸 English' },
-  { code: 'ru', label: '🇷🇺 Русский' },
-  { code: 'ja', label: '🇯🇵 日本語' },
-  { code: 'ko', label: '🇰🇷 한국어' },
-  { code: 'ms', label: '🇲🇾 Melayu' },
-  { code: 'id', label: '🇮🇩 Indonesia' },
-  { code: 'de', label: '🇩🇪 Deutsch' },
-  { code: 'fr', label: '🇫🇷 Français' },
-  { code: 'nl', label: '🇳🇱 Nederlands' },
-  { code: 'es', label: '🇪🇸 Español' },
-  { code: 'pt', label: '🇵🇹 Português' },
-  { code: 'it', label: '🇮🇹 Italiano' },
-  { code: 'tr', label: '🇹🇷 Türkçe' },
-  { code: 'vi', label: '🇻🇳 Tiếng Việt' },
-  { code: 'th', label: '🇹🇭 ไทย' },
-  { code: 'hi', label: '🇮🇳 हिन्दी' },
-  { code: 'bn', label: '🇧🇩 বাংলা' },
-  { code: 'tl', label: '🇵🇭 Filipino' },
-  { code: 'ar', label: '🇸🇦 العربية' },
-  { code: 'fa', label: '🇮🇷 فارسی' },
-  { code: 'ur', label: '🇵🇰 اردو' },
+  { code: 'pt', label: '🇧🇷 Português (Brasil)' },
+  { code: 'en', label: '🇺🇸 English (US)' },
 ]
 
-const RTL_LANGS = ['ar', 'fa', 'ur']
+const supportedLangCodes = new Set(LANGS.map((lang) => lang.code))
 
-// 已加载的语言数据（zh/en 预载；其余按需加载后填入，响应式触发 UI 更新）
-const langData = reactive<Record<string, Record<string, string>>>({ zh, en })
+// Both supported language bundles are ready immediately; other locale files are not loaded.
+const langData = reactive<Record<string, Record<string, string>>>({ pt, en })
 
-const currentLang = ref('zh')
+const currentLang = ref('pt')
 
 function initLang(): string {
   try {
-    return localStorage.getItem('lang') || 'zh'
+    const saved = localStorage.getItem('lang') || ''
+    return supportedLangCodes.has(saved) ? saved : 'pt'
   } catch {
-    return 'zh'
+    return 'pt'
   }
 }
 
 export function t(key: string): string {
   const lang = currentLang.value
   const data = langData[lang]
-  const val = (data && data[key]) ?? (langData['zh'] && langData['zh'][key]) ?? key
+  const val = (data && data[key]) ?? langData.pt[key] ?? key
   return val
 }
 
@@ -64,33 +44,21 @@ export function tf(key: string, params?: Record<string, string | number>): strin
 }
 
 export function applyLanguage(lang: string) {
-  currentLang.value = lang || 'zh'
+  currentLang.value = supportedLangCodes.has(lang) ? lang : 'pt'
   try {
     localStorage.setItem('lang', currentLang.value)
   } catch {
     /* ignore */
   }
-  document.documentElement.lang = currentLang.value === 'zh' ? 'zh-CN' : currentLang.value
-  document.documentElement.dir = RTL_LANGS.includes(currentLang.value) ? 'rtl' : 'ltr'
+  document.documentElement.lang = currentLang.value === 'pt' ? 'pt-BR' : 'en-US'
+  document.documentElement.dir = 'ltr'
 }
 
-// 1.8：懒加载语言包（import.meta.glob 静态收集 langs/*.json 为独立 chunk）
-const langLoaders = import.meta.glob('./langs/*.json')
 const loadingLang = ref<string | null>(null)
 
 async function loadLang(lang: string): Promise<void> {
-  if (!lang || langData[lang]) return
-  const loader = langLoaders[`./langs/${lang}.json`]
-  if (!loader) return
-  loadingLang.value = lang
-  try {
-    const mod = (await loader()) as { default: Record<string, string> }
-    langData[lang] = mod.default
-  } catch (e) {
-    // 加载失败：t() 自动回退 zh，无需阻断
-  } finally {
-    loadingLang.value = null
-  }
+  // Keep the public helper for compatibility; supported bundles are statically imported.
+  if (!supportedLangCodes.has(lang)) return
 }
 
 // 转义动态文本，防止 innerHTML 注入（XSS 防护）
@@ -109,7 +77,6 @@ export function useI18n() {
 
   function switchLang(l: string) {
     applyLanguage(l)
-    // 1.8：目标语言未加载则异步加载（加载期间 t() 回退 zh，完成后响应式更新）
     void loadLang(l)
   }
 
@@ -124,7 +91,6 @@ export function useI18n() {
 
 // 初始化语言（模块加载后立即同步）
 currentLang.value = initLang()
-// 1.8：若存储语言非 zh/en（如上次选了日语），首屏异步加载，避免回退中文
-void loadLang(currentLang.value)
+// Normalize legacy saved locales (for example zh or ja) to Portuguese on startup.
 
 export { currentLang }
